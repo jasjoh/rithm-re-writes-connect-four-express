@@ -37,6 +37,9 @@ router.post("/", async function (req, res) {
   return res.status(201).json({ player });
 });
 
+/** Deletes a player
+ * Returns the delete player's id
+ */
 router.delete("/:id", async function (req, res) {
   await Player.delete(req.params.id);
   return res.json({ deleted: req.params.id });
