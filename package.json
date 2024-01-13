@@ -2,5 +2,16 @@
   "dependencies": {
     "express": "^5.0.0-beta.1",
     "pg": "^8.11.3"
-  }
+  },
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "name": "connect_four_express",
+  "description": "Goal: Transition the Game model and logic from the client to the server",
+  "version": "1.0.0",
+  "main": "src/app.js",
+  "devDependencies": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
