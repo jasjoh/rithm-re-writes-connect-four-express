@@ -1,8 +1,6 @@
-"use strict";
-
 /** Simple demo Express app. */
-const express = require("express");
-const app = express();
+import express, { Express, Request, Response, NextFunction } from "express";
+const app: Express = express();
 
 const gamesRoutes = require('./routes/games');
 const playersRoutes = require('./routes/players');
@@ -19,16 +17,16 @@ app.use("/games", gamesRoutes);
 app.use("/players", playersRoutes);
 
 /** Handle 404 errors -- this matches everything */
-app.use(function (req, res, next) {
+app.use(function (req: Request, res: Response, next: NextFunction) {
 	console.log("Not Found error");
 	throw new NotFoundError();
 });
 
 /** Generic error handler; anything unhandled goes here. */
-app.use(function (err, req, res, next) {
+app.use(function (err: any, req: Request, res: Response, next: NextFunction) {
   if (process.env.NODE_ENV !== "test") console.error(err.stack);
   /* istanbul ignore next (ignore for coverage) */
-  const status= err.status || 500;
+  const status = err.status || 500; // TODO: define interface in expressError.js
   const message = err.message;
 
   return res.status(status).json({
