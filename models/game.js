@@ -49,8 +49,8 @@ class Game {
   }
 
   /**
-   * Find all games
-   * Returns [{ id, name, color, ai, createdOn }, ...]   *
+   * Retrieves an array of all games with summary information
+   * Returns [{ id, gameState, createdOn }, ...]   *
    * */
 
   static async getAll() {
@@ -58,13 +58,7 @@ class Game {
     const result = await db.query(`
         SELECT
           id,
-          height,
-          width,
-          board,
           game_state AS "gameState",
-          placed_pieces AS "placedPieces",
-          winning_set AS "winningSet",
-          curr_player_id AS "currPlayerId",
           created_on AS "createdOn"
         FROM games
         ORDER BY created_on`);
@@ -75,7 +69,7 @@ class Game {
   /**
    * Given a game id, return data about game.
    *
-   * Returns { id, name, color, ai, createdOn }
+   * Returns { ... game object ... }
    *
    * Throws NotFoundError if not found.
    **/
