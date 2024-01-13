@@ -1,10 +1,19 @@
-"use strict";
+import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
 
-const db = require("../db");
-const { BadRequestError, NotFoundError } = require("../expressError");
+import db from "../db";
+
 // const { sqlForPartialUpdate } = require("../helpers/sql");
 
-/** Related functions for players. */
+interface NewPlayerInterface {
+  name: string;
+  color: string;
+  ai: boolean;
+};
+
+interface PlayerInterface extends NewPlayerInterface {
+  id: string;
+  createdOn: string;
+};
 
 class Player {
   /**
@@ -15,7 +24,7 @@ class Player {
    * Returns { id, name, color, ai, createdOn }
    * */
 
-  static async create({ name, color, ai }) {
+  static async create(newPlayer: NewPlayerInterface) {
 
     const result = await db.query(`
                 INSERT INTO players (name,
@@ -28,13 +37,14 @@ class Player {
                     color,
                     ai,
                     created_on AS "createdOn"`, [
-          name,
-          color,
-          ai
+          newPlayer.name,
+          newPlayer.color,
+          newPlayer.ai
         ],
     );
 
     const player = result.rows[0];
+    console.log("TO BE TYPED: result.rows[0] in Player.create");
 
     return player;
   }
@@ -55,6 +65,8 @@ class Player {
         FROM players
         ORDER BY created_on`);
 
+    console.log("TO BE TYPED: result in Player.getAll");
+
     return result.rows;
   }
 
@@ -66,7 +78,7 @@ class Player {
    * Throws NotFoundError if not found.
    **/
 
-  static async get(id) {
+  static async get(id: string) {
     const result = await db.query(`
         SELECT id,
                name,
@@ -90,7 +102,7 @@ class Player {
    * Throws NotFoundError if player not found.
    **/
 
-  static async delete(id) {
+  static async delete(id: string) {
     const result = await db.query(`
         DELETE
         FROM players
@@ -102,4 +114,4 @@ class Player {
   }
 }
 
-module.exports = Player;
+export { Player, PlayerInterface };

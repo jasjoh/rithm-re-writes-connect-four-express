@@ -1,5 +1,3 @@
-"use strict";
-
 /** ExpressError extends normal JS error so we can
  *  add a status when we make an instance of it.
  *
@@ -7,7 +5,10 @@
  */
 
 class ExpressError extends Error {
-  constructor(message, status) {
+  message: string;
+  status: number;
+
+  constructor(message: string, status: number) {
     super();
     this.message = message;
     this.status = status;
@@ -46,7 +47,7 @@ class ForbiddenError extends ExpressError {
   }
 }
 
-module.exports = {
+export {
   ExpressError,
   NotFoundError,
   UnauthorizedError,

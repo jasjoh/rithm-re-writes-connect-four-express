@@ -1,4 +1,4 @@
-const { Client } = require("pg");
+import { Client } from "pg";
 
 const DB_URI = process.env.NODE_ENV === "test"
     ? "postgresql:///connect_four_test"
@@ -10,4 +10,4 @@ let db = new Client({
 
 db.connect();
 
-module.exports = db;
+export default db;

@@ -1,20 +1,17 @@
 /** Simple demo Express app. */
 import express, { Express, Request, Response, NextFunction } from "express";
+import { ExpressError, NotFoundError, BadRequestError } from "./expressError";
+
+import { gamesRouter } from "./routes/games";
+import { playersRouter } from "./routes/players";
+
 const app: Express = express();
-
-const gamesRoutes = require('./routes/games');
-const playersRoutes = require('./routes/players');
-
-// useful error class to throw
-const { NotFoundError, BadRequestError } = require("./expressError");
-
-// process JSON body => req.body
 app.use(express.json());
 
 /** ROUTES BELOW */
 
-app.use("/games", gamesRoutes);
-app.use("/players", playersRoutes);
+app.use("/games", gamesRouter);
+app.use("/players", playersRouter);
 
 /** Handle 404 errors -- this matches everything */
 app.use(function (req: Request, res: Response, next: NextFunction) {
@@ -23,10 +20,10 @@ app.use(function (req: Request, res: Response, next: NextFunction) {
 });
 
 /** Generic error handler; anything unhandled goes here. */
-app.use(function (err: any, req: Request, res: Response, next: NextFunction) {
+app.use(function (err: ExpressError, req: Request, res: Response, next: NextFunction) {
   if (process.env.NODE_ENV !== "test") console.error(err.stack);
   /* istanbul ignore next (ignore for coverage) */
-  const status = err.status || 500; // TODO: define interface in expressError.js
+  const status = err.status || 500;
   const message = err.message;
 
   return res.status(status).json({
@@ -34,4 +31,4 @@ app.use(function (err: any, req: Request, res: Response, next: NextFunction) {
   });
 });
 
-module.exports = app;
+export default app;

@@ -1,10 +1,14 @@
-"use strict";
+import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
 
-const db = require("../db");
-const { BadRequestError, NotFoundError } = require("../expressError");
+import db from "../db";
+import { PlayerInterface } from "./player";
+
 // const { sqlForPartialUpdate } = require("../helpers/sql");
 
-/** Related functions for games. */
+interface NewGameInterface {
+  height: number;
+  width: number;
+}
 
 class Game {
   /**
@@ -15,9 +19,9 @@ class Game {
    * Returns { ... game object ... }
    * */
 
-  static async create({ height = 7, width = 6 }) {
+  static async create(newGame: NewGameInterface = { height: 7, width: 6}) {
 
-    const board = Game.initializeNewBoard(height, width);
+    const board = Game.initializeNewBoard(newGame.height, newGame.width);
 
     const result = await db.query(`
                 INSERT INTO games (
@@ -37,13 +41,14 @@ class Game {
                     board,
                     game_state AS "gameState",
                     created_on AS "createdOn"`, [
-          height,
-          width,
+          newGame.height,
+          newGame.width,
           board
         ],
     );
 
     const game = result.rows[0];
+    console.log("TO BE TYPED: result.rows[0] in Game.create");
 
     return game;
   }
@@ -61,8 +66,10 @@ class Game {
           game_state AS "gameState",
           created_on AS "createdOn"
         FROM games
-        ORDER BY created_on`);
+        ORDER BY created_on`
+    );
 
+    console.log("TO BE TYPED: result in Game.getAll");
     return result.rows;
   }
 
@@ -74,7 +81,7 @@ class Game {
    * Throws NotFoundError if not found.
    **/
 
-  static async get(id) {
+  static async get(id: string) {
     const result = await db.query(`
         SELECT
           id,
@@ -103,7 +110,7 @@ class Game {
    * Throws NotFoundError if game not found.
    **/
 
-  static async delete(id) {
+  static async delete(id:string) {
     const result = await db.query(`
         DELETE
         FROM games
@@ -114,9 +121,16 @@ class Game {
     if (!game) throw new NotFoundError(`No game: ${id}`);
   }
 
-  static initializeNewBoard(height, width) {
+  static initializeNewBoard(height: number, width: number) {
 
-    const boardState = [];
+    interface BoardCellFinalStateInterface {
+      player: PlayerInterface | null;
+      validCoordSets: number[][][];
+    }
+
+    type BoardCellState = BoardCellFinalStateInterface | null;
+
+    const boardState: BoardCellState[][] = [];
 
     _initializeMatrix();
     _populateBoardSpaces();
@@ -151,10 +165,10 @@ class Game {
       // console.log("Board spaces populated:", boardState);
 
       /** Accepts board coordinates and return array of valid coord sets */
-      function _populateValidCoordSets(y, x) {
+      function _populateValidCoordSets(y: number, x: number) {
         // console.log("_populateValidCoordSets called with yx:", y, x);
-        const vcs = [];
-        let coordSet = [];
+        const vcs: number[][][] = [];
+        let coordSet: number[][] = [];
 
         /**
          * check each direction to see if a valid set of coords exist.
@@ -227,4 +241,4 @@ class Game {
   }
 }
 
-module.exports = Game;
+export default Game;
