@@ -1,7 +1,11 @@
 import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
+// import * as GameErrors from "../utilities/gameErrors";
+import { TooFewPlayers, PlayerAlreadyExists } from "../utilities/gameErrors";
 
 import db from "../db";
 import { PlayerInterface } from "./player";
+import { DebugLogger } from "util";
+import { QueryResult } from "pg";
 
 // const { sqlForPartialUpdate } = require("../helpers/sql");
 
@@ -11,6 +15,7 @@ interface NewGameInterface {
 }
 
 class Game {
+
   /**
    * Instantiates a new game based on params and returns it.
    *
@@ -18,7 +23,6 @@ class Game {
    *
    * Returns { ... game object ... }
    * */
-
   static async create(newGame: NewGameInterface = { height: 7, width: 6}) {
 
     const board = Game.initializeNewBoard(newGame.height, newGame.width);
@@ -57,7 +61,6 @@ class Game {
    * Retrieves an array of all games with summary information
    * Returns [{ id, gameState, createdOn }, ...]   *
    * */
-
   static async getAll() {
 
     const result = await db.query(`
@@ -80,7 +83,6 @@ class Game {
    *
    * Throws NotFoundError if not found.
    **/
-
   static async get(id: string) {
     const result = await db.query(`
         SELECT
@@ -105,11 +107,9 @@ class Game {
   }
 
   /**
-   * Delete given game from database; returns undefined.
-   *
+   * Delete given game from database; returns undefined.   *
    * Throws NotFoundError if game not found.
    **/
-
   static async delete(id:string) {
     const result = await db.query(`
         DELETE
@@ -121,11 +121,16 @@ class Game {
     if (!game) throw new NotFoundError(`No game: ${id}`);
   }
 
+  /** Initialized a new board upon creation of a new game
+   * Fills in all cells with BoardCellFinalStates { player, validCoords }
+   * Returns a newly created board (array of array of BoardCellFinalStates)
+   */
   static initializeNewBoard(height: number, width: number) {
 
     interface BoardCellFinalStateInterface {
       player: PlayerInterface | null;
       validCoordSets: number[][][];
+
     }
 
     type BoardCellState = BoardCellFinalStateInterface | null;
@@ -238,6 +243,64 @@ class Game {
       }
     }
 
+  }
+
+  /** Adds a player to an existing game
+   * Throws error if game or player doesn't exist or player already added
+   * Returns current player count if successful
+   */
+  static async addPlayer(playerId: string, gameId: string) {
+    console.log("Game.addPlayer() called with playerId, gameId:", playerId, gameId);
+    let result: QueryResult<any>;
+
+    try {
+      result = await db.query(`
+        WITH updated_rows AS (
+          INSERT INTO game_players (player_id, game_id)
+          VALUES ($1, $2)
+          RETURNING *
+        )
+        SELECT COUNT(*)
+        FROM game_players
+        WHERE game_id = $2`, [playerId, gameId]
+      );
+      console.log("result of adding player:", result);
+      return result.rowCount;
+    } catch(err: unknown) {
+      const postgresError = err as { code?: string, message: string };
+      if (postgresError.code === '23505') {
+        throw new PlayerAlreadyExists(
+          `Player ${playerId} has already been added to game ${gameId}`
+        );
+      } else { throw err; }
+    }
+
+    // const result = await db.query(`
+    //     INSERT INTO game_players (player_id, game_id)
+    //     VALUES ($1, $2)
+    //     RETURNING COUNT(*) AS total_players
+    //     WHERE game_id = $2`, [playerId, gameId]
+    // );
+  }
+
+  /** Starts a game.
+   * If the first player is an AI player, triggers them to take their turn
+   * Throws error is there are insufficient players to start a game or game
+   * doesn't exist
+   * Returns undefined
+  */
+  static async start(id: string) {
+    // verify 2 players minimum
+    const result = await db.query(`
+        SELECT COUNT(*)
+        FROM game_players
+        WHERE game_id = $1`, [id]
+    );
+    if (result.rowCount === null || result.rowCount < 2) {
+      // throw new GameErrors.TooFewPlayers()
+      throw new TooFewPlayers(`Game (${id}) has too few players to be started.`);
+    }
+    console.log('start player check results:', result);
   }
 }
 
