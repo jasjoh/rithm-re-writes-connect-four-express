@@ -47,7 +47,3 @@ CREATE TABLE game_turns (
     REFERENCES games ON DELETE CASCADE,
   created_on_epoch BIGINT DEFAULT extract(epoch from current_timestamp)
 );
-
-INSERT INTO players (ai, name, color)
-VALUES (TRUE, 'AI Player 1', '#c3c3c3'),
-       (FALSE, 'Human Player 2', '#c2c2c2');

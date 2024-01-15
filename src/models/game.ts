@@ -1,6 +1,6 @@
 import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
-// import * as GameErrors from "../utilities/gameErrors";
 import { TooFewPlayers, PlayerAlreadyExists } from "../utilities/gameErrors";
+import { SQLQueries } from "../utilities/sqlQueries";
 
 import db from "../db";
 import { PlayerInterface } from "./player";
@@ -274,13 +274,40 @@ class Game {
         );
       } else { throw err; }
     }
+  }
 
-    // const result = await db.query(`
-    //     INSERT INTO game_players (player_id, game_id)
-    //     VALUES ($1, $2)
-    //     RETURNING COUNT(*) AS total_players
-    //     WHERE game_id = $2`, [playerId, gameId]
-    // );
+  /**
+   * Removes a player from a game; returns undefined.   *
+   * Throws NotFoundError if game or player not found.
+   **/
+  static async removePlayer(playerId:string, gameId: string) {
+    const result = await db.query(`
+        DELETE
+        FROM game_players
+        WHERE player_id = $1 AND game_id = $2
+        RETURNING player_id`, [playerId, gameId]);
+    const removedPlayer = result.rows[0];
+
+    if (!removedPlayer) throw new NotFoundError(`No such player or game.`);
+  }
+
+  /** Adds a player to an existing game
+   * Throws error if game or player doesn't exist or player already added
+   * Returns current player count if successful
+   */
+  static async getPlayers(gameId: string) {
+    console.log("Game.getPlayers() called with ameId:", gameId)
+    const sqlQuery = `
+      SELECT ${SQLQueries.defaultPlayerCols}
+      FROM players
+      INNER JOIN game_players
+      ON game_players.player_id = players.id
+      WHERE game_players.game_id = $1
+      ORDER BY players.created_on
+    `
+    const result = await db.query(sqlQuery, [gameId]);
+    console.log("result rows of selecting game players:", result.rows);
+    return result.rows;
   }
 
   /** Starts a game.

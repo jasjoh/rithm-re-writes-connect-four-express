@@ -17,6 +17,32 @@ router.get("/", async function (req: Request, res: Response) {
   return res.json({ games });
 });
 
+/** Retrieves the list of players in a game
+ * Returns an array player objects like { id, ai, color, name, created_on }
+ */
+router.get("/:id/players", async function (req: Request, res: Response) {
+  const players = await Game.getPlayers(req.params.id);
+  return res.json({ players });
+});
+
+/** Adds a player to a game.
+ * Game is specified via 'id' URL param. Player is specified via body like { id }
+ * Returns updated count of players
+ */
+router.post("/:id/players", async function (req: Request, res: Response) {
+  // console.log("add player called with playerId, gameId:", req.body.id, req.params.id);
+  const result = await Game.addPlayer(req.body.id, req.params.id);
+  return res.status(201).json({ playerCount: result });
+});
+
+/** Removes a player from a game
+ * Returns the removed player's ID
+ */
+router.delete("/:gameid/players/:playerid", async function (req: Request, res: Response) {
+  const result = await Game.removePlayer(req.params.playerid, req.params.gameid);
+  return res.json({ removed: req.params.playerid });
+});
+
 /** Retrieves a specific game based on id
  * Returns a game object like { id, ai, color, name, created_on }
  */
@@ -41,21 +67,11 @@ router.delete("/:id", async function (req: Request, res: Response) {
   return res.json({ deleted: req.params.id });
 });
 
-/** Adds a player to a game.
- * Game is specified via 'id' URL param. Player is specified via body like { id }
- * Returns updated count of players
- */
-router.post("/:id/players", async function (req: Request, res: Response) {
-  console.log("add player called with playerId, gameId:", req.body.id, req.params.id);
-  const result = await Game.addPlayer(req.body.id, req.params.id);
-  return res.status(201).json({ playerCount: result });
-});
-
 /** Starts the specified game (based on 'id' in URL param)
  * Returns 200 OK with no body if successful
  */
 router.post("/:id/start", async function (req: Request, res: Response) {
-  console.log("Start game called with gameId:", req.params.id);
+  // console.log("Start game called with gameId:", req.params.id);
   await Game.start(req.params.id);
   return res.status(200);
 });

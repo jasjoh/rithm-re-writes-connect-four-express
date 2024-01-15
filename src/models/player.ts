@@ -1,4 +1,5 @@
 import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
+import { SQLQueries } from "../utilities/sqlQueries";
 
 import db from "../db";
 
@@ -56,14 +57,12 @@ class Player {
 
   static async getAll() {
 
-    const result = await db.query(`
-        SELECT id,
-               name,
-               color,
-               ai,
-               created_on AS "createdOn"
-        FROM players
-        ORDER BY created_on`);
+    const sqlQuery = `
+      SELECT ${SQLQueries.defaultPlayerCols}
+      FROM players
+      ORDER BY created_on
+    `
+    const result = await db.query(sqlQuery);
 
     console.log("TO BE TYPED: result in Player.getAll");
 
