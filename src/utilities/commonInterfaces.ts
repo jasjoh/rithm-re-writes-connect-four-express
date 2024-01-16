@@ -1,5 +1,5 @@
-interface CountResult {
+interface CountResultInterface {
   count: number;
 }
 
-export { CountResult };
+export { CountResultInterface };

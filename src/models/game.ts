@@ -1,13 +1,18 @@
 import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
 import { TooFewPlayers, PlayerAlreadyExists } from "../utilities/gameErrors";
 import { SQLQueries } from "../utilities/sqlQueries";
-import { CountResult } from "../utilities/commonInterfaces";
+import { CountResultInterface } from "../utilities/commonInterfaces";
 
 import db from "../db";
 import { PlayerInterface } from "./player";
 import { QueryResult } from "pg";
 
 // const { sqlForPartialUpdate } = require("../helpers/sql");
+
+/**
+ * TODO:
+ * - update select statement to return as camelCase + update interfaces
+ */
 
 interface NewGameInterface {
   height: number;
@@ -29,7 +34,8 @@ interface GameInterface {
 interface GamePlayersInterface {
   player_id: string;
   game_id: string;
-  player_order: number | null;
+  play_order: number | null;
+  ai: undefined | boolean;
 }
 
 interface GameTurnsInterface {
@@ -48,7 +54,7 @@ class Game {
    *
    * Returns { ... game object ... }
    * */
-  static async create(newGame: NewGameInterface = { height: 7, width: 6}) {
+  static async create(newGame: NewGameInterface = { height: 7, width: 6 }) {
 
     const result: QueryResult<GameInterface> = await db.query(`
                 INSERT INTO games (
@@ -65,9 +71,9 @@ class Game {
                     width,
                     game_state AS "gameState",
                     created_on AS "createdOn"`, [
-          newGame.height,
-          newGame.width
-        ],
+      newGame.height,
+      newGame.width
+    ],
     );
 
     const game = result.rows[0];
@@ -81,7 +87,7 @@ class Game {
    * */
   static async getAll() {
 
-    const result : QueryResult<GameInterface> = await db.query(`
+    const result: QueryResult<GameInterface> = await db.query(`
         SELECT
           id,
           game_state AS "gameState",
@@ -101,7 +107,7 @@ class Game {
    * Throws NotFoundError if not found.
    **/
   static async get(gameId: string) {
-    const result : QueryResult<GameInterface> = await db.query(`
+    const result: QueryResult<GameInterface> = await db.query(`
         SELECT
           id,
           height,
@@ -127,8 +133,8 @@ class Game {
    * Delete given game from database; returns undefined.   *
    * Throws NotFoundError if game not found.
    **/
-  static async delete(gameId:string) {
-    const result : QueryResult<GameInterface> = await db.query(`
+  static async delete(gameId: string) {
+    const result: QueryResult<GameInterface> = await db.query(`
         DELETE
         FROM games
         WHERE id = $1
@@ -154,8 +160,8 @@ class Game {
         `
         , [playerId, gameId]
       );
-    } catch(err: unknown) {
-      const postgresError = err as { code?: string, message: string };
+    } catch (err: unknown) {
+      const postgresError = err as { code?: string, message: string; };
       if (postgresError.code === '23505') {
         throw new PlayerAlreadyExists(
           `Player ${playerId} has already been added to game ${gameId}`
@@ -163,7 +169,7 @@ class Game {
       } else { throw err; }
     }
 
-    const result : QueryResult<CountResult>  = await db.query(`
+    const result: QueryResult<CountResultInterface> = await db.query(`
         SELECT COUNT(*)
         FROM game_players
         WHERE game_id = $1
@@ -177,8 +183,8 @@ class Game {
    * Removes a player from a game; returns undefined.   *
    * Throws NotFoundError if game or player not found.
    **/
-  static async removePlayer(playerId:string, gameId: string) {
-    const result : QueryResult<GamePlayersInterface> = await db.query(`
+  static async removePlayer(playerId: string, gameId: string) {
+    const result: QueryResult<GamePlayersInterface> = await db.query(`
         DELETE
         FROM game_players
         WHERE player_id = $1 AND game_id = $2
@@ -201,8 +207,8 @@ class Game {
       ON game_players.player_id = players.id
       WHERE game_players.game_id = $1
       ORDER BY players.created_on
-    `
-    const result : QueryResult<PlayerInterface> = await db.query(sqlQuery, [gameId]);
+    `;
+    const result: QueryResult<PlayerInterface> = await db.query(sqlQuery, [gameId]);
     // console.log("result rows of selecting game players:", result.rows);
     return result.rows;
   }
@@ -216,7 +222,7 @@ class Game {
   static async start(gameId: string) {
 
     // verify game exists
-    const queryGIResult : QueryResult<GameInterface> = await db.query(`
+    const queryGIResult: QueryResult<GameInterface> = await db.query(`
         SELECT
           height,
           width
@@ -226,7 +232,7 @@ class Game {
     if (!game) throw new NotFoundError(`No game with id: ${gameId}`);
 
     // verify 2 players minimum
-    const queryCountResult : QueryResult<CountResult> = await db.query(`
+    const queryCountResult: QueryResult<CountResultInterface> = await db.query(`
         SELECT COUNT(*)
         FROM game_players
         WHERE game_id = $1`, [gameId]
@@ -246,7 +252,7 @@ class Game {
           winning_set = DEFAULT,
           curr_player_id = DEFAULT
         WHERE id = $1`, [gameId, board]
-    )
+    );
 
     // start the next turn
     Game.startTurn(gameId);
@@ -265,24 +271,27 @@ class Game {
      * -- if current player is AI, calls that player's aiTakeTurn() callback
      * -- if current player is human, awaits that player's pieceDrop
      */
-    let queryGIResult : QueryResult<GameInterface> = await db.query(`
+    let queryGIResult: QueryResult<GameInterface> = await db.query(`
       SELECT curr_player_id
       FROM games
       WHERE id = $1
     `, [gameId]
-    )
+    );
+
+    let currPlayerId = queryGIResult.rows[0].curr_player_id;
+    let nextPlayerId: string;
 
     // check if there is a current player
-    if (queryGIResult.rows[0].curr_player_id === null) {
+    if (currPlayerId === null) {
       // there is not, so set turn order for all players
 
       // get an array of all player IDs
-      const queryGPIResult : QueryResult<GamePlayersInterface> = await db.query(`
+      const queryGPIResult: QueryResult<GamePlayersInterface> = await db.query(`
           SELECT player_id
           FROM game_players
           WHERE game_id = $1
       `, [gameId]
-      )
+      );
 
       let playerIds: string[] = [];
       for (let row of queryGPIResult.rows) {
@@ -293,14 +302,14 @@ class Game {
       // randomly sort the array () - Fisher Yates
       for (let i = playerIds.length - 1; i > 0; i--) {
         let j = Math.floor(Math.random() * i);
-        [playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]]
+        [playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]];
       }
       console.log("playerIds after randomly sorting:", playerIds);
 
       // build SQL statement from array
       let sqlQuery = 'UPDATE game_players SET play_order = CASE ';
       for (let i = 0; i < playerIds.length; i++) {
-        sqlQuery += `WHEN player_id = '${playerIds[i]}' THEN ${i} `
+        sqlQuery += `WHEN player_id = '${playerIds[i]}' THEN ${i} `;
       }
       sqlQuery += `END WHERE game_id = $1`;
       console.log("completed sqlQuery for setting turns:", sqlQuery);
@@ -308,16 +317,53 @@ class Game {
       // execute SQL statement to set play order
       await db.query(sqlQuery, [gameId]);
 
-      // set curr_player to game_players with play_order = 0
+      // set curr_player to game_players player with play_order = 0
       await db.query(`
           UPDATE games
           SET curr_player_id = $2
           WHERE id = $1
-      `, [gameId, playerIds[0]])
-
+      `, [gameId, playerIds[0]]);
     }
 
     // set the current player
+    const queryGPIResult : QueryResult<GamePlayersInterface> = await db.query(`
+        SELECT game_player.player_id, game_players.play_order, player.ai
+        FROM game_players
+        INNER JOIN players ON game_players.player_id = players.id
+        WHERE game_players.game_id = $1
+    `, [gameId]);
+
+    // { player_id, game_id, play_order }
+    const gamePlayers = queryGPIResult.rows;
+    const currGamePlayerObject = gamePlayers.find(o => o.player_id === currPlayerId);
+
+    if (currGamePlayerObject === undefined) {
+      throw new Error("Unable to find current player.");
+    }
+
+    if (currGamePlayerObject.play_order === gamePlayers.length - 1) {
+      // we are on the last player, go to the first player
+      const turnZeroPlayer = gamePlayers.find(o => o.play_order === 0);
+      if (turnZeroPlayer === undefined) {
+        throw new Error("Unable to find turn zero player.");
+      }
+      nextPlayerId = turnZeroPlayer.player_id;
+    } else {
+      const currPlayerPlayOrder = currGamePlayerObject.play_order;
+      if (currPlayerPlayOrder === null) {
+        throw new Error("Player play order improperly initialized.");
+      }
+      const potentialNextPlayer = gamePlayers.find(o => o.play_order === currPlayerPlayOrder + 1)
+      if (potentialNextPlayer === undefined) {
+        throw new Error("Unable to find next player.");
+      }
+      nextPlayerId = potentialNextPlayer.player_id;
+    }
+
+    console.log("nextPlayerId found:", nextPlayerId);
+
+    // set curr_player on game to nextPlayerId
+    // if next player is ai player, call their callback
 
   }
 
@@ -399,36 +445,36 @@ class Game {
         */
 
         // does a row existing 4 rows above?
-        if (boardState[y-3] !== undefined) {
+        if (boardState[y - 3] !== undefined) {
           // check up and diagonals
 
           // check up
-          if (boardState[y-3][x] !== undefined) {
+          if (boardState[y - 3][x] !== undefined) {
             coordSet = [];
             coordSet.push([y, x]);
-            coordSet.push([y-1, x]);
-            coordSet.push([y-2, x]);
-            coordSet.push([y-3, x]);
+            coordSet.push([y - 1, x]);
+            coordSet.push([y - 2, x]);
+            coordSet.push([y - 3, x]);
             vcs.push(coordSet);
           }
 
           // check upLeft
-          if (boardState[y-3][x-3] !== undefined) {
+          if (boardState[y - 3][x - 3] !== undefined) {
             coordSet = [];
             coordSet.push([y, x]);
-            coordSet.push([y-1, x-1]);
-            coordSet.push([y-2, x-2]);
-            coordSet.push([y-3, x-3]);
+            coordSet.push([y - 1, x - 1]);
+            coordSet.push([y - 2, x - 2]);
+            coordSet.push([y - 3, x - 3]);
             vcs.push(coordSet);
           }
 
           // check upRight
-          if (boardState[y-3][x+3] !== undefined) {
+          if (boardState[y - 3][x + 3] !== undefined) {
             coordSet = [];
             coordSet.push([y, x]);
-            coordSet.push([y-1, x+1]);
-            coordSet.push([y-2, x+2]);
-            coordSet.push([y-3, x+3]);
+            coordSet.push([y - 1, x + 1]);
+            coordSet.push([y - 2, x + 2]);
+            coordSet.push([y - 3, x + 3]);
             vcs.push(coordSet);
           }
         }
@@ -436,22 +482,22 @@ class Game {
         // check left and right
 
         // check left
-        if (boardState[y][x-3] !== undefined) {
+        if (boardState[y][x - 3] !== undefined) {
           coordSet = [];
           coordSet.push([y, x]);
-          coordSet.push([y, x-1]);
-          coordSet.push([y, x-2]);
-          coordSet.push([y, x-3]);
+          coordSet.push([y, x - 1]);
+          coordSet.push([y, x - 2]);
+          coordSet.push([y, x - 3]);
           vcs.push(coordSet);
         }
 
         // check right
-        if (boardState[y][x+3] !== undefined) {
+        if (boardState[y][x + 3] !== undefined) {
           coordSet = [];
           coordSet.push([y, x]);
-          coordSet.push([y, x+1]);
-          coordSet.push([y, x+2]);
-          coordSet.push([y, x+3]);
+          coordSet.push([y, x + 1]);
+          coordSet.push([y, x + 2]);
+          coordSet.push([y, x + 3]);
           vcs.push(coordSet);
         }
 

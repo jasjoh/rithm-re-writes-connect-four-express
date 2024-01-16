@@ -5,6 +5,12 @@ import db from "../db";
 
 // const { sqlForPartialUpdate } = require("../helpers/sql");
 
+/**
+ * TODO:
+ * - implement CountResultInterface
+ * - implement QueryResult interfaces
+ */
+
 interface NewPlayerInterface {
   name: string;
   color: string;
