@@ -1,10 +1,10 @@
 import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
 import { TooFewPlayers, PlayerAlreadyExists } from "../utilities/gameErrors";
 import { SQLQueries } from "../utilities/sqlQueries";
+import { CountResult } from "../utilities/commonInterfaces";
 
 import db from "../db";
 import { PlayerInterface } from "./player";
-import { DebugLogger } from "util";
 import { QueryResult } from "pg";
 
 // const { sqlForPartialUpdate } = require("../helpers/sql");
@@ -12,6 +12,31 @@ import { QueryResult } from "pg";
 interface NewGameInterface {
   height: number;
   width: number;
+}
+
+interface GameInterface {
+  id: string;
+  width: number;
+  height: number;
+  game_state: number;
+  placed_pieces: number[][] | null;
+  board: any[][] | null;
+  winning_set: number[][] | null;
+  curr_player_id: string | null;
+  created_on: Date;
+}
+
+interface GamePlayersInterface {
+  player_id: string;
+  game_id: string;
+  player_order: number | null;
+}
+
+interface GameTurnsInterface {
+  id: number;
+  player_id: string;
+  game_id: string;
+  created_on_epoch: number;
 }
 
 class Game {
@@ -25,34 +50,27 @@ class Game {
    * */
   static async create(newGame: NewGameInterface = { height: 7, width: 6}) {
 
-    const board = Game.initializeNewBoard(newGame.height, newGame.width);
-
-    const result = await db.query(`
+    const result: QueryResult<GameInterface> = await db.query(`
                 INSERT INTO games (
                                     height,
-                                    width,
-                                    board
+                                    width
                                   )
                 VALUES  (
                           $1,
-                          $2,
-                          $3
+                          $2
                         )
                 RETURNING
                     id,
                     height,
                     width,
-                    board,
                     game_state AS "gameState",
                     created_on AS "createdOn"`, [
           newGame.height,
-          newGame.width,
-          board
+          newGame.width
         ],
     );
 
     const game = result.rows[0];
-    console.log("TO BE TYPED: result.rows[0] in Game.create");
 
     return game;
   }
@@ -63,7 +81,7 @@ class Game {
    * */
   static async getAll() {
 
-    const result = await db.query(`
+    const result : QueryResult<GameInterface> = await db.query(`
         SELECT
           id,
           game_state AS "gameState",
@@ -72,7 +90,6 @@ class Game {
         ORDER BY created_on`
     );
 
-    console.log("TO BE TYPED: result in Game.getAll");
     return result.rows;
   }
 
@@ -83,8 +100,8 @@ class Game {
    *
    * Throws NotFoundError if not found.
    **/
-  static async get(id: string) {
-    const result = await db.query(`
+  static async get(gameId: string) {
+    const result : QueryResult<GameInterface> = await db.query(`
         SELECT
           id,
           height,
@@ -97,11 +114,11 @@ class Game {
           created_on AS "createdOn"
         FROM games
         WHERE id = $1
-        ORDER BY created_on`, [id]);
+        ORDER BY created_on`, [gameId]);
 
     const game = result.rows[0];
 
-    if (!game) throw new NotFoundError(`No game with id: ${id}`);
+    if (!game) throw new NotFoundError(`No game with id: ${gameId}`);
 
     return game;
   }
@@ -110,15 +127,215 @@ class Game {
    * Delete given game from database; returns undefined.   *
    * Throws NotFoundError if game not found.
    **/
-  static async delete(id:string) {
-    const result = await db.query(`
+  static async delete(gameId:string) {
+    const result : QueryResult<GameInterface> = await db.query(`
         DELETE
         FROM games
         WHERE id = $1
-        RETURNING id`, [id]);
+        RETURNING id`, [gameId]);
     const game = result.rows[0];
 
-    if (!game) throw new NotFoundError(`No game: ${id}`);
+    if (!game) throw new NotFoundError(`No game: ${gameId}`);
+  }
+
+  /** Adds a player to an existing game
+   * Throws error if game or player doesn't exist or player already added
+   * Returns current player count if successful
+   */
+  static async addPlayer(playerId: string, gameId: string) {
+    console.log("Game.addPlayer() called with playerId, gameId:", playerId, gameId);
+
+    try {
+      await db.query(
+        `
+        INSERT INTO game_players (player_id, game_id)
+        VALUES ($1, $2)
+        RETURNING *
+        `
+        , [playerId, gameId]
+      );
+    } catch(err: unknown) {
+      const postgresError = err as { code?: string, message: string };
+      if (postgresError.code === '23505') {
+        throw new PlayerAlreadyExists(
+          `Player ${playerId} has already been added to game ${gameId}`
+        );
+      } else { throw err; }
+    }
+
+    const result : QueryResult<CountResult>  = await db.query(`
+        SELECT COUNT(*)
+        FROM game_players
+        WHERE game_id = $1
+    `, [gameId]);
+    console.log("result of getting count from game_players:", result);
+
+    return result.rows[0].count;
+  }
+
+  /**
+   * Removes a player from a game; returns undefined.   *
+   * Throws NotFoundError if game or player not found.
+   **/
+  static async removePlayer(playerId:string, gameId: string) {
+    const result : QueryResult<GamePlayersInterface> = await db.query(`
+        DELETE
+        FROM game_players
+        WHERE player_id = $1 AND game_id = $2
+        RETURNING player_id`, [playerId, gameId]);
+    const removedPlayer = result.rows[0];
+
+    if (!removedPlayer) throw new NotFoundError(`No such player or game.`);
+  }
+
+  /** Adds a player to an existing game
+   * Throws error if game or player doesn't exist or player already added
+   * Returns current player count if successful
+   */
+  static async getPlayers(gameId: string) {
+    // console.log("Game.getPlayers() called with gameId:", gameId)
+    const sqlQuery = `
+      SELECT ${SQLQueries.defaultPlayerCols}, game_players.play_order
+      FROM players
+      INNER JOIN game_players
+      ON game_players.player_id = players.id
+      WHERE game_players.game_id = $1
+      ORDER BY players.created_on
+    `
+    const result : QueryResult<PlayerInterface> = await db.query(sqlQuery, [gameId]);
+    // console.log("result rows of selecting game players:", result.rows);
+    return result.rows;
+  }
+
+  /** Starts a game.
+   * Initializes / resets game state and then calls startTurn
+   * Throws error is there are insufficient players to start a game or game
+   * doesn't exist
+   * Returns undefined
+  */
+  static async start(gameId: string) {
+
+    // verify game exists
+    const queryGIResult : QueryResult<GameInterface> = await db.query(`
+        SELECT
+          height,
+          width
+        FROM games
+        WHERE id = $1`, [gameId]);
+    const game = queryGIResult.rows[0];
+    if (!game) throw new NotFoundError(`No game with id: ${gameId}`);
+
+    // verify 2 players minimum
+    const queryCountResult : QueryResult<CountResult> = await db.query(`
+        SELECT COUNT(*)
+        FROM game_players
+        WHERE game_id = $1`, [gameId]
+    );
+    if (queryCountResult.rows[0].count < 2) {
+      throw new TooFewPlayers(`Game (${gameId}) has too few players to be started.`);
+    }
+
+    // initialize the board and reset game state
+    const board = Game.initializeNewBoard(game.height, game.width);
+    await db.query(`
+        UPDATE games
+        SET
+          board = $2,
+          game_state = DEFAULT,
+          placed_pieces = DEFAULT,
+          winning_set = DEFAULT,
+          curr_player_id = DEFAULT
+        WHERE id = $1`, [gameId, board]
+    )
+
+    // start the next turn
+    Game.startTurn(gameId);
+    return undefined;
+  }
+
+  /**
+   * Initializes a new turn for a given game; accepts the id of that game
+   * Updates current player and if it's an AI, calls that player's aiTakeTurn()
+   * Returns undefined
+   */
+  static async startTurn(gameId: string) {
+    /**
+     * Core Logic:
+     * - determines current player
+     * -- if current player is AI, calls that player's aiTakeTurn() callback
+     * -- if current player is human, awaits that player's pieceDrop
+     */
+    let queryGIResult : QueryResult<GameInterface> = await db.query(`
+      SELECT curr_player_id
+      FROM games
+      WHERE id = $1
+    `, [gameId]
+    )
+
+    // check if there is a current player
+    if (queryGIResult.rows[0].curr_player_id === null) {
+      // there is not, so set turn order for all players
+
+      // get an array of all player IDs
+      const queryGPIResult : QueryResult<GamePlayersInterface> = await db.query(`
+          SELECT player_id
+          FROM game_players
+          WHERE game_id = $1
+      `, [gameId]
+      )
+
+      let playerIds: string[] = [];
+      for (let row of queryGPIResult.rows) {
+        playerIds.push(row.player_id);
+      }
+      console.log("playerIds after extracting them from query rows:", playerIds);
+
+      // randomly sort the array () - Fisher Yates
+      for (let i = playerIds.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * i);
+        [playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]]
+      }
+      console.log("playerIds after randomly sorting:", playerIds);
+
+      // build SQL statement from array
+      let sqlQuery = 'UPDATE game_players SET play_order = CASE ';
+      for (let i = 0; i < playerIds.length; i++) {
+        sqlQuery += `WHEN player_id = '${playerIds[i]}' THEN ${i} `
+      }
+      sqlQuery += `END WHERE game_id = $1`;
+      console.log("completed sqlQuery for setting turns:", sqlQuery);
+
+      // execute SQL statement to set play order
+      await db.query(sqlQuery, [gameId]);
+
+      // set curr_player to game_players with play_order = 0
+      await db.query(`
+          UPDATE games
+          SET curr_player_id = $2
+          WHERE id = $1
+      `, [gameId, playerIds[0]])
+
+    }
+
+    // set the current player
+
+  }
+
+  /**
+   * Attempts to drop a piece on behalf of a player at a given column
+   * Accepts a game ID, player ID and column to drop in
+   * Returns true if the drop was successful, otherwise false   *
+   */
+  static async dropPiece(gameId: string, playerId: string, col: number) {
+    /**
+     * Core Logic:
+     * - determine validity of drop
+     * - place piece if valid (update board state)
+     * - add game turn record
+     * - check for end game:
+     * -- if end game, update state accordingly and you're done
+     * -- if game is not ended, call startTurn for provide gameId
+     */
   }
 
   /** Initialized a new board upon creation of a new game
@@ -243,91 +460,6 @@ class Game {
       }
     }
 
-  }
-
-  /** Adds a player to an existing game
-   * Throws error if game or player doesn't exist or player already added
-   * Returns current player count if successful
-   */
-  static async addPlayer(playerId: string, gameId: string) {
-    console.log("Game.addPlayer() called with playerId, gameId:", playerId, gameId);
-    let result: QueryResult<any>;
-
-    try {
-      result = await db.query(`
-        WITH updated_rows AS (
-          INSERT INTO game_players (player_id, game_id)
-          VALUES ($1, $2)
-          RETURNING *
-        )
-        SELECT COUNT(*)
-        FROM game_players
-        WHERE game_id = $2`, [playerId, gameId]
-      );
-      console.log("result of adding player:", result);
-      return result.rowCount;
-    } catch(err: unknown) {
-      const postgresError = err as { code?: string, message: string };
-      if (postgresError.code === '23505') {
-        throw new PlayerAlreadyExists(
-          `Player ${playerId} has already been added to game ${gameId}`
-        );
-      } else { throw err; }
-    }
-  }
-
-  /**
-   * Removes a player from a game; returns undefined.   *
-   * Throws NotFoundError if game or player not found.
-   **/
-  static async removePlayer(playerId:string, gameId: string) {
-    const result = await db.query(`
-        DELETE
-        FROM game_players
-        WHERE player_id = $1 AND game_id = $2
-        RETURNING player_id`, [playerId, gameId]);
-    const removedPlayer = result.rows[0];
-
-    if (!removedPlayer) throw new NotFoundError(`No such player or game.`);
-  }
-
-  /** Adds a player to an existing game
-   * Throws error if game or player doesn't exist or player already added
-   * Returns current player count if successful
-   */
-  static async getPlayers(gameId: string) {
-    console.log("Game.getPlayers() called with ameId:", gameId)
-    const sqlQuery = `
-      SELECT ${SQLQueries.defaultPlayerCols}
-      FROM players
-      INNER JOIN game_players
-      ON game_players.player_id = players.id
-      WHERE game_players.game_id = $1
-      ORDER BY players.created_on
-    `
-    const result = await db.query(sqlQuery, [gameId]);
-    console.log("result rows of selecting game players:", result.rows);
-    return result.rows;
-  }
-
-  /** Starts a game.
-   * If the first player is an AI player, triggers them to take their turn
-   * Throws error is there are insufficient players to start a game or game
-   * doesn't exist
-   * Returns undefined
-  */
-  static async start(id: string) {
-    // verify 2 players minimum
-    const result = await db.query(`
-        SELECT COUNT(*)
-        FROM game_players
-        WHERE game_id = $1`, [id]
-    );
-    if (result.rowCount === null || result.rowCount < 2) {
-      // throw new GameErrors.TooFewPlayers()
-      throw new TooFewPlayers(`Game (${id}) has too few players to be started.`);
-    }
-    console.log('start player check results:', result);
   }
 }
 

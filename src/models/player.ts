@@ -13,7 +13,7 @@ interface NewPlayerInterface {
 
 interface PlayerInterface extends NewPlayerInterface {
   id: string;
-  createdOn: string;
+  createdOn: Date;
 };
 
 class Player {

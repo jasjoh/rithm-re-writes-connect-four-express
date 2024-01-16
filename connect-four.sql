@@ -22,7 +22,7 @@ CREATE TABLE games (
   height INTEGER DEFAULT 6 NOT NULL,
   game_state INTEGER DEFAULT 1 NOT NULL,
   placed_pieces INTEGER[][],
-  board JSONB[][] NOT NULL,
+  board JSONB[][],
   winning_set INTEGER[][],
   curr_player_id UUID
     REFERENCES players,
@@ -34,6 +34,7 @@ CREATE TABLE game_players (
     REFERENCES players ON DELETE CASCADE,
   game_id UUID
     REFERENCES games ON DELETE CASCADE,
+  play_order INTEGER,
   PRIMARY KEY (player_id, game_id),
   UNIQUE (player_id, game_id)
 );
