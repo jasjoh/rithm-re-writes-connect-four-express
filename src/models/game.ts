@@ -91,8 +91,11 @@ class Game {
         SELECT
           id,
           game_state AS "gameState",
-          created_on AS "createdOn"
+          created_on AS "createdOn",
+          COUNT(game_players.game_id) AS "totalPlayers"
         FROM games
+        LEFT JOIN game_players on games.id = game_players.game_id
+        GROUP BY games.id, games.game_state, games.created_on
         ORDER BY created_on`
     );
 
@@ -117,10 +120,15 @@ class Game {
           placed_pieces AS "placedPieces",
           winning_set AS "winningSet",
           curr_player_id AS "currPlayerId",
-          created_on AS "createdOn"
+          created_on AS "createdOn",
+          COUNT(game_players.game_id) as "totalPlayers"
         FROM games
+        INNER JOIN game_players ON games.id = game_players.game_id
         WHERE id = $1
-        ORDER BY created_on`, [gameId]);
+        GROUP BY games.id, games.height, games.width, games.board,
+                  games.game_state, games.placed_pieces, games.winning_set,
+                  games.curr_player_id, games.created_on
+    `, [gameId]);
 
     const game = result.rows[0];
 
