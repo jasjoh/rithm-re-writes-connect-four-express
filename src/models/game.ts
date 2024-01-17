@@ -273,6 +273,7 @@ class Game {
    * Returns undefined
    */
   static async startTurn(gameId: string) {
+    console.log("Game.startTurn called w/ gameId:", gameId);
     /**
      * Core Logic:
      * - determines current player
@@ -287,11 +288,14 @@ class Game {
     );
 
     let currPlayerId = queryGIResult.rows[0].curr_player_id;
+    console.log("currPlayerId established:", currPlayerId);
+
     let nextPlayerId: string;
 
     // check if there is a current player
     if (currPlayerId === null) {
       // there is not, so set turn order for all players
+      console.log("No current player found.")
 
       // get an array of all player IDs
       const queryGPIResult: QueryResult<GamePlayersInterface> = await db.query(`
@@ -326,6 +330,7 @@ class Game {
       await db.query(sqlQuery, [gameId]);
 
       // set curr_player to game_players player with play_order = 0
+      currPlayerId = playerIds[0];
       await db.query(`
           UPDATE games
           SET curr_player_id = $2
@@ -333,9 +338,11 @@ class Game {
       `, [gameId, playerIds[0]]);
     }
 
-    // set the current player
+    console.log("play order established and curr player set");
+
+    // get game players set the current player
     const queryGPIResult : QueryResult<GamePlayersInterface> = await db.query(`
-        SELECT game_player.player_id, game_players.play_order, player.ai
+        SELECT game_players.player_id, game_players.play_order, players.ai
         FROM game_players
         INNER JOIN players ON game_players.player_id = players.id
         WHERE game_players.game_id = $1
@@ -343,6 +350,9 @@ class Game {
 
     // { player_id, game_id, play_order }
     const gamePlayers = queryGPIResult.rows;
+    console.log("game players after setting play order:", gamePlayers);
+
+    console.log("attempting to find player with currPlayerId:", currPlayerId);
     const currGamePlayerObject = gamePlayers.find(o => o.player_id === currPlayerId);
 
     if (currGamePlayerObject === undefined) {
