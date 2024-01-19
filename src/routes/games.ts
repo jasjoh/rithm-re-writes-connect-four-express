@@ -58,7 +58,7 @@ router.post("/:gameid/cols/:colid", async function (
     req.params.gameid,
     req.body.playerId,
     req.params.colid);
-  return res.status(200);
+  return res.sendStatus(200);
 });
 
 /** Retrieves a specific game based on id
@@ -91,7 +91,7 @@ router.delete("/:id", async function (req: Request, res: Response) {
 router.post("/:id/start", async function (req: Request, res: Response) {
   // console.log("Start game called with gameId:", req.params.id);
   await Game.start(req.params.id);
-  return res.status(200);
+  return res.sendStatus(200);
 });
 
 export { router as gamesRouter };

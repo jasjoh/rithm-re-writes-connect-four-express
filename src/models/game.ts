@@ -1,11 +1,15 @@
 import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
-import { TooFewPlayers, PlayerAlreadyExists } from "../utilities/gameErrors";
+import {
+  TooFewPlayers, PlayerAlreadyExists,
+  InvalidGameState, InvalidPiecePlacement, NotCurrentPlayer
+} from "../utilities/gameErrors";
 import { SQLQueries } from "../utilities/sqlQueries";
 import { CountResultInterface } from "../utilities/commonInterfaces";
 
 import db from "../db";
 import { PlayerInterface } from "./player";
 import { QueryResult } from "pg";
+import { InitializeHook } from "module";
 
 // const { sqlForPartialUpdate } = require("../helpers/sql");
 
@@ -29,6 +33,11 @@ interface GameInterface {
   winning_set: number[][] | null;
   curr_player_id: string | null;
   created_on: Date;
+}
+
+interface InitializedGameInterface extends GameInterface {
+  board: any[][];
+  curr_player_id: string;
 }
 
 interface GamePlayersInterface {
@@ -439,6 +448,91 @@ class Game {
     console.log(`dropPiece() called with
       gameId: ${gameId}, playerId: ${playerId}, col: ${col}`
     )
+
+    const queryGIResult: QueryResult<GameInterface> = await db.query(`
+      SELECT board, game_state, curr_player_id, width, height, placed_pieces
+      FROM games
+      WHERE id = $1
+    `, [gameId]);
+
+    const gameResult = queryGIResult.rows[0];
+
+    const initGame = _validateGameState(gameResult);
+
+    if (col < 0 || col > initGame.width - 1) {
+      throw new InvalidPiecePlacement('Specified column is out of bounds.')
+    }
+
+    const targetRow: number | null = _findEmptyCellInColumn(col);
+    console.log(`targetRow ${targetRow} found.`)
+
+    if (targetRow === null) {
+      throw new InvalidPiecePlacement('Column is full.')
+    }
+
+    await _addToBoard(targetRow, col);
+
+
+
+    function _validateGameState(game: GameInterface): InitializedGameInterface {
+      if (game === null) throw new NotFoundError(`No game with id: ${gameId}`);
+      if (game.board === null) {
+        throw new InvalidGameState('Game board not initialized.');
+      }
+      if (game.game_state !== 1) {
+        throw new InvalidGameState('Game is not started or has finished.');
+      }
+      if (game.curr_player_id !== playerId) {
+        throw new NotCurrentPlayer(`${playerId} is not the current player.`);
+      }
+      return game as InitializedGameInterface;
+    }
+
+    function _findEmptyCellInColumn(col: number): number | null {
+      console.log(`_findEmptyCellInColumn(${col}) called.`)
+      // check if the column is full and return 'null' if true
+      if (initGame.board[0][col].player !== null) {
+        console.log("this col was full");
+        return null;
+      }
+
+      let row = 0; // start at first row
+
+      // loop through rows top to bottom until we either:
+      // -- find a non-null cell (and return the slot above)
+      // -- reach the last cell and return it
+      while (row < initGame.height) {
+        if (initGame.board[row][col].player !== null) {
+          // console.log("found a piece at row, col", row, " ", col);
+          // console.log("returning the row above:", row - 1);
+          console.log(`returning ${row} - 1.`);
+          return row - 1;
+        }
+        row++;
+      }
+      console.log(`returning initGame.height (${initGame.height}) - 1:`, initGame.height - 1);
+      return initGame.height - 1;
+    }
+
+    async function _addToBoard(y: number, x: number): Promise<void> {
+      console.log(`_addToBoard(${y}, ${x}) called.`)
+      initGame.board[y][x].player = playerId;
+      if (initGame.placed_pieces === null) {
+        initGame.placed_pieces = [[y,x]];
+      } else {
+        initGame.placed_pieces.push([y,x]);
+      }
+
+      // console.log('updated board after addition:', initGame.board);
+
+      await db.query(`
+        UPDATE games
+        SET
+          board = $2,
+          placed_pieces = $3
+        WHERE id = $1
+      `, [gameId, initGame.board, initGame.placed_pieces]);
+    }
   }
 
   /** Initialized a new board upon creation of a new game
