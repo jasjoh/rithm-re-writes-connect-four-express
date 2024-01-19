@@ -7,6 +7,10 @@ import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
 
 import Game from "../models/game";
 
+interface DropPieceRequestBody {
+  playerId: string;
+}
+
 const router: Router = express.Router();
 
 /** Retrieves a list of all games
@@ -41,6 +45,20 @@ router.post("/:id/players", async function (req: Request, res: Response) {
 router.delete("/:gameid/players/:playerid", async function (req: Request, res: Response) {
   const result = await Game.removePlayer(req.params.playerid, req.params.gameid);
   return res.json({ removed: req.params.playerid });
+});
+
+/** Attempts to place a piece in the specific column in the specified game
+ * Returns 200 OK for valid piece drop location
+ */
+router.post("/:gameid/cols/:colid", async function (
+    req: Request<{ gameid: string, colid: number}, {}, DropPieceRequestBody>,
+    res: Response
+  ) {
+  const result = await Game.dropPiece(
+    req.params.gameid,
+    req.body.playerId,
+    req.params.colid);
+  return res.status(200);
 });
 
 /** Retrieves a specific game based on id
