@@ -46,5 +46,6 @@ CREATE TABLE game_turns (
     REFERENCES players ON DELETE SET NULL,
   game_id UUID
     REFERENCES games ON DELETE CASCADE,
+  location INTEGER[] NOT NULL,
   created_on_epoch BIGINT DEFAULT extract(epoch from current_timestamp)
 );

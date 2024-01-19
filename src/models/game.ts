@@ -259,7 +259,7 @@ class Game {
     }
 
     // initialize the board and reset game state
-    const board = Game.initializeNewBoard(game.height, game.width);
+    const board = _initializeNewBoard(game.height, game.width);
     await db.query(`
         UPDATE games
         SET
@@ -274,6 +274,131 @@ class Game {
     // start the next turn
     Game.startTurn(gameId);
     return undefined;
+
+
+    /** Initialized a new board upon creation of a new game
+     * Fills in all cells with BoardCellFinalStates { player, validCoords }
+     * Returns a newly created board (array of array of BoardCellFinalStates)
+     */
+    function _initializeNewBoard(height: number, width: number) {
+
+      interface BoardCellFinalStateInterface {
+        player: PlayerInterface | null;
+        validCoordSets: number[][][];
+
+      }
+
+      type BoardCellState = BoardCellFinalStateInterface | null;
+
+      const boardState: BoardCellState[][] = [];
+
+      _initializeMatrix();
+      _populateBoardSpaces();
+
+      return boardState;
+
+      /** Initializes the valid boundaries of the board */
+      function _initializeMatrix() {
+        // console.log("_initializeMatrix() called.");
+        for (let y = 0; y < height; y++) {
+          const row = [];
+          for (let x = 0; x < width; x++) {
+            row.push(null);
+          }
+          boardState.push(row);
+        }
+        // console.log("Matrix initialized.")
+      }
+
+      function _populateBoardSpaces() {
+        // console.log("_populateBoardSpaces() called.")
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            // console.log("attempting to set game board for xy:", y, x);
+            boardState[y][x] = {
+              player: null,
+              validCoordSets: _populateValidCoordSets(y, x)
+            };
+          }
+        }
+
+        // console.log("Board spaces populated:", boardState);
+
+        /** Accepts board coordinates and return array of valid coord sets */
+        function _populateValidCoordSets(y: number, x: number) {
+          // console.log("_populateValidCoordSets called with yx:", y, x);
+          const vcs: number[][][] = [];
+          let coordSet: number[][] = [];
+
+          /**
+           * check each direction to see if a valid set of coords exist.
+           * since we can't lookup column values for rows which are undefined,
+           * we will check if the row exists before checking anything else
+          */
+
+          // does a row existing 4 rows above?
+          if (boardState[y - 3] !== undefined) {
+            // check up and diagonals
+
+            // check up
+            if (boardState[y - 3][x] !== undefined) {
+              coordSet = [];
+              coordSet.push([y, x]);
+              coordSet.push([y - 1, x]);
+              coordSet.push([y - 2, x]);
+              coordSet.push([y - 3, x]);
+              vcs.push(coordSet);
+            }
+
+            // check upLeft
+            if (boardState[y - 3][x - 3] !== undefined) {
+              coordSet = [];
+              coordSet.push([y, x]);
+              coordSet.push([y - 1, x - 1]);
+              coordSet.push([y - 2, x - 2]);
+              coordSet.push([y - 3, x - 3]);
+              vcs.push(coordSet);
+            }
+
+            // check upRight
+            if (boardState[y - 3][x + 3] !== undefined) {
+              coordSet = [];
+              coordSet.push([y, x]);
+              coordSet.push([y - 1, x + 1]);
+              coordSet.push([y - 2, x + 2]);
+              coordSet.push([y - 3, x + 3]);
+              vcs.push(coordSet);
+            }
+          }
+
+          // check left and right
+
+          // check left
+          if (boardState[y][x - 3] !== undefined) {
+            coordSet = [];
+            coordSet.push([y, x]);
+            coordSet.push([y, x - 1]);
+            coordSet.push([y, x - 2]);
+            coordSet.push([y, x - 3]);
+            vcs.push(coordSet);
+          }
+
+          // check right
+          if (boardState[y][x + 3] !== undefined) {
+            coordSet = [];
+            coordSet.push([y, x]);
+            coordSet.push([y, x + 1]);
+            coordSet.push([y, x + 2]);
+            coordSet.push([y, x + 3]);
+            vcs.push(coordSet);
+          }
+
+          // console.log("Valid coord sets populated:", vcs)
+          return vcs;
+        }
+      }
+
+    }
   }
 
   /**
@@ -316,8 +441,8 @@ class Game {
       newGame = true;
 
       // there is not, so set turn order for all players
-      console.log("No current player found.")
-      console.log("Establishing player order and selecting / setting curr player.")
+      console.log("No current player found.");
+      console.log("Establishing player order and selecting / setting curr player.");
 
       // get an array of all player IDs
       const queryGPIResult: QueryResult<GamePlayersInterface> = await db.query(`
@@ -340,7 +465,7 @@ class Game {
       }
       console.log("playerIds after randomly sorting:", playerIds);
 
-      console.log("setting play order in game_players.")
+      console.log("setting play order in game_players.");
       // build SQL statement from array
       let sqlQuery = 'UPDATE game_players SET play_order = CASE ';
       for (let i = 0; i < playerIds.length; i++) {
@@ -351,7 +476,7 @@ class Game {
 
       // execute SQL statement to set play order
       await db.query(sqlQuery, [gameId]);
-      console.log("play order set in game_players")
+      console.log("play order set in game_players");
 
       // set curr_player to game_players player with play_order = 0
       currPlayerId = playerIds[0];
@@ -376,7 +501,7 @@ class Game {
     */
 
     // get game players
-    const queryGPIResult : QueryResult<GamePlayersInterface> = await db.query(`
+    const queryGPIResult: QueryResult<GamePlayersInterface> = await db.query(`
         SELECT game_players.player_id, game_players.play_order, players.ai
         FROM game_players
         INNER JOIN players ON game_players.player_id = players.id
@@ -413,7 +538,7 @@ class Game {
         throw new Error("Player play order improperly initialized.");
       }
 
-      const potentialNextPlayer = gamePlayersWithAi.find(o => o.play_order === currPlayerPlayOrder + 1)
+      const potentialNextPlayer = gamePlayersWithAi.find(o => o.play_order === currPlayerPlayOrder + 1);
 
       if (potentialNextPlayer === undefined) {
         throw new Error("Unable to find next player.");
@@ -447,7 +572,7 @@ class Game {
      */
     console.log(`dropPiece() called with
       gameId: ${gameId}, playerId: ${playerId}, col: ${col}`
-    )
+    );
 
     const queryGIResult: QueryResult<GameInterface> = await db.query(`
       SELECT board, game_state, curr_player_id, width, height, placed_pieces
@@ -460,20 +585,21 @@ class Game {
     const initGame = _validateGameState(gameResult);
 
     if (col < 0 || col > initGame.width - 1) {
-      throw new InvalidPiecePlacement('Specified column is out of bounds.')
+      throw new InvalidPiecePlacement('Specified column is out of bounds.');
     }
 
     const targetRow: number | null = _findEmptyCellInColumn(col);
-    console.log(`targetRow ${targetRow} found.`)
+    console.log(`targetRow ${targetRow} found.`);
 
     if (targetRow === null) {
-      throw new InvalidPiecePlacement('Column is full.')
+      throw new InvalidPiecePlacement('Column is full.');
     }
 
     await _addToBoard(targetRow, col);
 
+    await _addTurnRecord(gameId, playerId, [targetRow, col]);
 
-
+    /** Validates games is in state where a piece can be dropped by the current player. */
     function _validateGameState(game: GameInterface): InitializedGameInterface {
       if (game === null) throw new NotFoundError(`No game with id: ${gameId}`);
       if (game.board === null) {
@@ -488,8 +614,9 @@ class Game {
       return game as InitializedGameInterface;
     }
 
+    /* Finds an empty row in a given column to place a piece. */
     function _findEmptyCellInColumn(col: number): number | null {
-      console.log(`_findEmptyCellInColumn(${col}) called.`)
+      console.log(`_findEmptyCellInColumn(${col}) called.`);
       // check if the column is full and return 'null' if true
       if (initGame.board[0][col].player !== null) {
         console.log("this col was full");
@@ -514,13 +641,14 @@ class Game {
       return initGame.height - 1;
     }
 
-    async function _addToBoard(y: number, x: number): Promise<void> {
-      console.log(`_addToBoard(${y}, ${x}) called.`)
+    /** Adds a piece to a location in the board */
+    async function _addToBoard(y: number, x: number): Promise<number[]> {
+      console.log(`_addToBoard(${y}, ${x}) called.`);
       initGame.board[y][x].player = playerId;
       if (initGame.placed_pieces === null) {
-        initGame.placed_pieces = [[y,x]];
+        initGame.placed_pieces = [[y, x]];
       } else {
-        initGame.placed_pieces.push([y,x]);
+        initGame.placed_pieces.push([y, x]);
       }
 
       // console.log('updated board after addition:', initGame.board);
@@ -531,132 +659,25 @@ class Game {
           board = $2,
           placed_pieces = $3
         WHERE id = $1
-      `, [gameId, initGame.board, initGame.placed_pieces]);
-    }
-  }
+      `, [gameId, initGame.board, initGame.placed_pieces]
+      );
 
-  /** Initialized a new board upon creation of a new game
-   * Fills in all cells with BoardCellFinalStates { player, validCoords }
-   * Returns a newly created board (array of array of BoardCellFinalStates)
-   */
-  static initializeNewBoard(height: number, width: number) {
-
-    interface BoardCellFinalStateInterface {
-      player: PlayerInterface | null;
-      validCoordSets: number[][][];
-
+      return [y, x];
     }
 
-    type BoardCellState = BoardCellFinalStateInterface | null;
+    /** Add turn record to a game */
+    async function _addTurnRecord(gameId: string, playerId: string, location: number[]) {
+      console.log(`Game turns called with:
+        gameId(${gameId}),
+        playerId(${playerId}),
+        location(${location})`
+      )
 
-    const boardState: BoardCellState[][] = [];
-
-    _initializeMatrix();
-    _populateBoardSpaces();
-
-    return boardState;
-
-    /** Initializes the valid boundaries of the board */
-    function _initializeMatrix() {
-      // console.log("_initializeMatrix() called.");
-      for (let y = 0; y < height; y++) {
-        const row = [];
-        for (let x = 0; x < width; x++) {
-          row.push(null);
-        }
-        boardState.push(row);
-      }
-      // console.log("Matrix initialized.")
+      await db.query(`
+        INSERT INTO game_turns ( game_id, player_id, location )
+        VALUES ( $1, $2, $3 )
+      `, [gameId, playerId, location]);
     }
-
-    function _populateBoardSpaces() {
-      // console.log("_populateBoardSpaces() called.")
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          // console.log("attempting to set game board for xy:", y, x);
-          boardState[y][x] = {
-            player: null,
-            validCoordSets: _populateValidCoordSets(y, x)
-          };
-        }
-      }
-
-      // console.log("Board spaces populated:", boardState);
-
-      /** Accepts board coordinates and return array of valid coord sets */
-      function _populateValidCoordSets(y: number, x: number) {
-        // console.log("_populateValidCoordSets called with yx:", y, x);
-        const vcs: number[][][] = [];
-        let coordSet: number[][] = [];
-
-        /**
-         * check each direction to see if a valid set of coords exist.
-         * since we can't lookup column values for rows which are undefined,
-         * we will check if the row exists before checking anything else
-        */
-
-        // does a row existing 4 rows above?
-        if (boardState[y - 3] !== undefined) {
-          // check up and diagonals
-
-          // check up
-          if (boardState[y - 3][x] !== undefined) {
-            coordSet = [];
-            coordSet.push([y, x]);
-            coordSet.push([y - 1, x]);
-            coordSet.push([y - 2, x]);
-            coordSet.push([y - 3, x]);
-            vcs.push(coordSet);
-          }
-
-          // check upLeft
-          if (boardState[y - 3][x - 3] !== undefined) {
-            coordSet = [];
-            coordSet.push([y, x]);
-            coordSet.push([y - 1, x - 1]);
-            coordSet.push([y - 2, x - 2]);
-            coordSet.push([y - 3, x - 3]);
-            vcs.push(coordSet);
-          }
-
-          // check upRight
-          if (boardState[y - 3][x + 3] !== undefined) {
-            coordSet = [];
-            coordSet.push([y, x]);
-            coordSet.push([y - 1, x + 1]);
-            coordSet.push([y - 2, x + 2]);
-            coordSet.push([y - 3, x + 3]);
-            vcs.push(coordSet);
-          }
-        }
-
-        // check left and right
-
-        // check left
-        if (boardState[y][x - 3] !== undefined) {
-          coordSet = [];
-          coordSet.push([y, x]);
-          coordSet.push([y, x - 1]);
-          coordSet.push([y, x - 2]);
-          coordSet.push([y, x - 3]);
-          vcs.push(coordSet);
-        }
-
-        // check right
-        if (boardState[y][x + 3] !== undefined) {
-          coordSet = [];
-          coordSet.push([y, x]);
-          coordSet.push([y, x + 1]);
-          coordSet.push([y, x + 2]);
-          coordSet.push([y, x + 3]);
-          vcs.push(coordSet);
-        }
-
-        // console.log("Valid coord sets populated:", vcs)
-        return vcs;
-      }
-    }
-
   }
 }
 
