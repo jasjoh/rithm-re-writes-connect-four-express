@@ -10,6 +10,7 @@ import db from "../db";
 import { PlayerInterface } from "./player";
 import { QueryResult } from "pg";
 import { InitializeHook } from "module";
+import { stringify } from "querystring";
 
 // const { sqlForPartialUpdate } = require("../helpers/sql");
 
@@ -165,23 +166,28 @@ class Game {
    * Throws error if game or player doesn't exist or player already added
    * Returns current player count if successful
    */
-  static async addPlayer(playerId: string, gameId: string) {
-    console.log("Game.addPlayer() called with playerId, gameId:", playerId, gameId);
+  static async addPlayers(players: string[], gameId: string) {
+
+    let sqlQueryValues: string = '';
+
+    for (let i = 0; i < players.length; i++) {
+      i === players.length - 1 ? sqlQueryValues += `($1, $${i+2})` : sqlQueryValues += `($1, $${i+2}),`
+    }
 
     try {
       await db.query(
         `
-        INSERT INTO game_players (player_id, game_id)
-        VALUES ($1, $2)
+        INSERT INTO game_players (game_id, player_id)
+        VALUES ${sqlQueryValues}
         RETURNING *
         `
-        , [playerId, gameId]
+        , [gameId, ...players]
       );
     } catch (err: unknown) {
       const postgresError = err as { code?: string, message: string; };
       if (postgresError.code === '23505') {
         throw new PlayerAlreadyExists(
-          `Player ${playerId} has already been added to game ${gameId}`
+          `One or more players have already been added to game ${gameId}`
         );
       } else { throw err; }
     }

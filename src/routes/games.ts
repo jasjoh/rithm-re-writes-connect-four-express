@@ -34,8 +34,8 @@ router.get("/:id/players", async function (req: Request, res: Response) {
  * Returns updated count of players
  */
 router.post("/:id/players", async function (req: Request, res: Response) {
-  // console.log("add player called with playerId, gameId:", req.body.id, req.params.id);
-  const result = await Game.addPlayer(req.body.id, req.params.id);
+  // console.log("add players called with playerId, gameId:", req.body.id, req.params.id);
+  const result = await Game.addPlayers(req.body, req.params.id);
   return res.status(201).json({ playerCount: result });
 });
 
