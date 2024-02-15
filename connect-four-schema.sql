@@ -1,10 +1,3 @@
-\echo 'Delete and recreate connect-four db?'
-\prompt 'Return for yes or control-C to cancel > ' foo
-
-DROP DATABASE IF EXISTS connect_four;
-CREATE DATABASE connect_four;
-\connect connect_four;
-
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE players (
