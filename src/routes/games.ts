@@ -5,7 +5,7 @@
 import express, { Express, Request, Response, NextFunction, Router } from "express";
 import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
 
-import Game from "../models/game";
+import { Game } from "../models/game";
 
 interface DropPieceRequestBody {
   playerId: string;

@@ -1,4 +1,4 @@
-import Game from "../models/game";
+import { Game } from "../models/game";
 
 class GameError extends Error {
   constructor (message: string) {

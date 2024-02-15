@@ -38,17 +38,17 @@ interface GameInterface {
   id: string;
   width: number;
   height: number;
-  game_state: number;
-  placed_pieces: number[][] | null;
+  gameState: number;
+  placedPieces: number[][] | null;
   board: InitializedBoardType | null;
-  winning_set: number[][] | null;
-  curr_player_id: string | null;
+  winningSet: number[][] | null;
+  currPlayerId: string | null;
   created_on: Date;
 }
 
 interface InitializedGameInterface extends GameInterface {
   board: InitializedBoardType;
-  curr_player_id: string;
+  currPlayerIid: string;
 }
 
 interface CheckGameEndInterface {
@@ -57,9 +57,9 @@ interface CheckGameEndInterface {
 }
 
 interface GamePlayersInterface {
-  player_id: string;
-  game_id: string;
-  play_order: number | null;
+  playerId: string;
+  gameId: string;
+  playOrder: number | null;
   ai: undefined | boolean;
 }
 
@@ -187,7 +187,10 @@ class Game {
         `
         INSERT INTO game_players (game_id, player_id)
         VALUES ${sqlQueryValues}
-        RETURNING *
+        RETURNING
+          player_id as "playerId",
+          game_id as "gameId",
+          play_order as "playOrder"
         `
         , [gameId, ...players]
       );
@@ -219,7 +222,7 @@ class Game {
         DELETE
         FROM game_players
         WHERE player_id = $1 AND game_id = $2
-        RETURNING player_id`, [playerId, gameId]);
+        RETURNING player_id as "playerId"`, [playerId, gameId]);
     const removedPlayer = result.rows[0];
 
     if (!removedPlayer) throw new NotFoundError(`No such player or game.`);
@@ -421,7 +424,7 @@ class Game {
      * -- if current player is human, awaits that player's pieceDrop
      */
     let queryGIResult: QueryResult<GameInterface> = await db.query(`
-      SELECT id, width, curr_player_id
+      SELECT id, width, curr_player_id as "currPlayerId"
       FROM games
       WHERE id = $1
     `, [gameId]
@@ -429,7 +432,7 @@ class Game {
 
     console.log("initialQueryGIResult:", queryGIResult);
 
-    let currPlayerId = queryGIResult.rows[0].curr_player_id;
+    let currPlayerId = queryGIResult.rows[0].currPlayerId;
     console.log("currPlayerId established:", currPlayerId);
 
     let nextPlayer: GamePlayersInterface;
@@ -453,7 +456,7 @@ class Game {
 
       // get an array of all player IDs
       const queryGPIResult: QueryResult<GamePlayersInterface> = await db.query(`
-          SELECT player_id
+          SELECT player_id as "playerId"
           FROM game_players
           WHERE game_id = $1
       `, [gameId]
@@ -461,7 +464,7 @@ class Game {
 
       let playerIds: string[] = [];
       for (let row of queryGPIResult.rows) {
-        playerIds.push(row.player_id);
+        playerIds.push(row.playerId);
       }
       console.log("All playerIds after querying game_players:", playerIds);
 
@@ -493,7 +496,7 @@ class Game {
           UPDATE games
           SET curr_player_id = $2
           WHERE id = $1
-          RETURNING games.id, games.curr_player_id
+          RETURNING games.id, games.curr_player_id as "currPlayerId"
       `, [gameId, playerIds[0]]);
 
       console.log("game updated w/ curr player set:", queryGIResult.rows[0]);
@@ -505,7 +508,10 @@ class Game {
 
     // get game players
     const queryGPIResult: QueryResult<GamePlayersInterface> = await db.query(`
-        SELECT game_players.player_id, game_players.play_order, players.ai
+        SELECT
+          game_players.player_id as "playerId",
+          game_players.play_order as "playOrder",
+          players.ai
         FROM game_players
         INNER JOIN players ON game_players.player_id = players.id
         WHERE game_players.game_id = $1
@@ -516,7 +522,7 @@ class Game {
 
     console.log("attempting to find player with currPlayerId:", currPlayerId);
     const currGamePlayerObject = gamePlayersWithAiData.find(
-      o => o.player_id === currPlayerId
+      o => o.playerId === currPlayerId
     );
 
     if (currGamePlayerObject === undefined) {
@@ -524,9 +530,9 @@ class Game {
     }
 
     // if this is a new game or current player is last player, next player is the turn 0 player
-    if (newGame || currGamePlayerObject.play_order === gamePlayersWithAiData.length - 1) {
+    if (newGame || currGamePlayerObject.playOrder === gamePlayersWithAiData.length - 1) {
 
-      const turnZeroPlayer = gamePlayersWithAiData.find(o => o.play_order === 0);
+      const turnZeroPlayer = gamePlayersWithAiData.find(o => o.playOrder === 0);
       if (turnZeroPlayer === undefined) {
         throw new Error("Unable to find turn zero player.");
       }
@@ -537,14 +543,14 @@ class Game {
     } else {
 
       // we are not a new game or the last player, so just go to next player in order
-      const currPlayerPlayOrder = currGamePlayerObject.play_order;
+      const currPlayerPlayOrder = currGamePlayerObject.playOrder;
 
       if (currPlayerPlayOrder === null) {
         throw new Error("Player play order improperly initialized.");
       }
 
       const potentialNextPlayer = gamePlayersWithAiData.find(
-        o => o.play_order === currPlayerPlayOrder + 1
+        o => o.playOrder === currPlayerPlayOrder + 1
       );
 
       if (potentialNextPlayer === undefined) {
@@ -562,7 +568,7 @@ class Game {
         UPDATE games
         SET curr_player_id = $2
         WHERE id = $1
-        RETURNING games.id, games.curr_player_id
+        RETURNING games.id, games.curr_player_id as "currPlayerId"
     `, [gameId, nextPlayer]);
 
     console.log("game updated w/ curr player set:", queryGIResult.rows[0]);
@@ -593,7 +599,13 @@ class Game {
     );
 
     const queryGIResult: QueryResult<GameInterface> = await db.query(`
-      SELECT board, game_state, curr_player_id, width, height, placed_pieces
+      SELECT
+        board,
+        game_state as "gameState",
+        curr_player_id as "currPlayerId",
+        width,
+        height,
+        placed_pieces as "placedPieces"
       FROM games
       WHERE id = $1
     `, [gameId]);
@@ -631,10 +643,10 @@ class Game {
       if (gameResult.board === null) {
         throw new InvalidGameState('Game board not initialized.');
       }
-      if (gameResult.game_state !== 1) {
+      if (gameResult.gameState !== 1) {
         throw new InvalidGameState('Game is not started or has finished.');
       }
-      if (gameResult.curr_player_id !== playerId) {
+      if (gameResult.currPlayerId !== playerId) {
         throw new NotCurrentPlayer(`${playerId} is not the current player.`);
       }
       return gameResult as InitializedGameInterface;
@@ -671,10 +683,10 @@ class Game {
     async function _addToBoard(): Promise<number[]> {
       console.log(`_addToBoard(${pieceLocation[0]}, ${pieceLocation[1]}) called.`);
       initGame.board[pieceLocation[0]][pieceLocation[1]].playerId = playerId;
-      if (initGame.placed_pieces === null) {
-        initGame.placed_pieces = [[pieceLocation[0], pieceLocation[1]]];
+      if (initGame.placedPieces === null) {
+        initGame.placedPieces = [[pieceLocation[0], pieceLocation[1]]];
       } else {
-        initGame.placed_pieces.push([pieceLocation[0], pieceLocation[1]]);
+        initGame.placedPieces.push([pieceLocation[0], pieceLocation[1]]);
       }
 
       // console.log('updated board after addition:', initGame.board);
@@ -685,7 +697,7 @@ class Game {
           board = $2,
           placed_pieces = $3
         WHERE id = $1
-      `, [gameId, initGame.board, initGame.placed_pieces]
+      `, [gameId, initGame.board, initGame.placedPieces]
       );
 
       return [pieceLocation[0], pieceLocation[1]];
@@ -702,7 +714,7 @@ class Game {
     /** Checks for game end */
     async function _checkForGameEnd() {
       const sqlQueryGIResult : QueryResult<CheckGameEndInterface> = await db.query(`
-        SELECT board, playedPieces
+        SELECT board, played_pieces as "playedPieces"
         FROM games
         WHERE id = $1
       `, [gameId]);
@@ -756,4 +768,4 @@ class Game {
   }
 }
 
-export default Game;
+export { Game, NewGameInterface };
