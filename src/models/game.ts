@@ -63,13 +63,6 @@ interface GamePlayersInterface {
   ai: undefined | boolean;
 }
 
-interface GameTurnsInterface {
-  id: number;
-  player_id: string;
-  game_id: string;
-  created_on_epoch: number;
-}
-
 class Game {
 
   /**
@@ -239,7 +232,7 @@ class Game {
   static async getPlayers(gameId: string) {
     // console.log("Game.getPlayers() called with gameId:", gameId)
     const sqlQuery = `
-      SELECT ${SQLQueries.defaultPlayerCols}, game_players.play_order
+      SELECT ${SQLQueries.defaultPlayerCols}, game_players.play_order as "playOrder"
       FROM players
       INNER JOIN game_players
       ON game_players.player_id = players.id
@@ -581,6 +574,8 @@ class Game {
   /**
    * Attempts to drop a piece on behalf of a player at a given column
    * Accepts a game ID, player ID and column to drop in
+   * If successful, adds turn record and checks for game end
+   * If game is not over, starts next turn (to switch to next player)
    * Returns true if the drop was successful, otherwise false   *
    */
   static async dropPiece(gameId: string, playerId: string, col: number) {
