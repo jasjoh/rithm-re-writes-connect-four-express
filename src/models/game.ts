@@ -768,4 +768,4 @@ class Game {
   }
 }
 
-export { Game, NewGameInterface };
+export { Game, GameInterface, NewGameInterface };
