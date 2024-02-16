@@ -43,7 +43,8 @@ interface GameInterface {
   board: InitializedBoardType | null;
   winningSet: number[][] | null;
   currPlayerId: string | null;
-  created_on: Date;
+  createdOn: Date;
+  totalPlayers: number;
 }
 
 interface InitializedGameInterface extends GameInterface {
@@ -73,6 +74,11 @@ class Game {
    * Returns { ... game object ... }
    * */
   static async create(newGame: NewGameInterface = { height: 7, width: 6 }) {
+
+    /** TODO:
+     * - input validation
+     * - error handling
+     */
 
     const result: QueryResult<GameInterface> = await db.query(`
                 INSERT INTO games (
@@ -135,13 +141,13 @@ class Game {
           width,
           board,
           game_state AS "gameState",
-          placed_pieces AS "playedPieces",
+          placed_pieces AS "placedPieces",
           winning_set AS "winningSet",
           curr_player_id AS "currPlayerId",
           created_on AS "createdOn",
-          COUNT(game_players.game_id) as "totalPlayers"
+          COUNT(game_players.game_id)::int as "totalPlayers"
         FROM games
-        INNER JOIN game_players ON games.id = game_players.game_id
+        LEFT OUTER JOIN game_players ON games.id = game_players.game_id
         WHERE id = $1
         GROUP BY games.id, games.height, games.width, games.board,
                   games.game_state, games.placed_pieces, games.winning_set,
@@ -149,6 +155,7 @@ class Game {
     `, [gameId]);
 
     const game = result.rows[0];
+    console.log("game found:", game);
 
     if (!game) throw new NotFoundError(`No game with id: ${gameId}`);
 
