@@ -12,7 +12,22 @@ import { QueryResult } from "pg";
 import { InitializeHook } from "module";
 import { stringify } from "querystring";
 
-// const { sqlForPartialUpdate } = require("../helpers/sql");
+/** Game model
+ * Supports CRUD operations + Game Turn Logic
+ * Games are composed of:
+ * - id: GUID
+ * - height and width: numbers
+ * - gameState: numbers {0: not started, 1: started, 2: won, 3: tied}
+ * - placedPieces: array of coordinates, e.g. [[0, 1], [0, 2]]
+ * - winningSet: array of coordinates, e.g. [[0, 1], [0, 2]]
+ * - currPlayerId: the id (GUID) of the current player
+ * - totalPlayers: the total number of players added to the game
+ * - createdOn: the datetime for when the game was created
+ * - board: a matrix of board cell states: { playerId, validCoordSets }
+ * --- validCoordSets: array of coordinates, e.g. [[0, 1], [0, 2]]
+ * --- note that board cell states are null until the game is started
+ *
+ */
 
 /**
  * TODO:
@@ -54,7 +69,7 @@ interface InitializedGameInterface extends GameInterface {
 
 interface CheckGameEndInterface {
   board: InitializedBoardType;
-  playedPieces: number[][];
+  placedPieces: number[][];
 }
 
 interface GamePlayersInterface {
@@ -62,6 +77,11 @@ interface GamePlayersInterface {
   gameId: string;
   playOrder: number | null;
   ai: undefined | boolean;
+}
+
+interface EndGameState {
+  state: number,
+  winningSet: number[][] | null
 }
 
 class Game {
@@ -576,7 +596,7 @@ class Game {
         SET curr_player_id = $2
         WHERE id = $1
         RETURNING games.id, games.curr_player_id as "currPlayerId"
-    `, [gameId, nextPlayer]);
+    `, [gameId, nextPlayer.playerId]);
 
     console.log("game updated w/ curr player set:", queryGIResult.rows[0]);
 
@@ -642,7 +662,25 @@ class Game {
 
     await _addTurnRecord();
 
-    await _checkForGameEnd();
+    const sqlQueryGIResult : QueryResult<CheckGameEndInterface> = await db.query(`
+        SELECT board, placed_pieces as "placedPieces"
+        FROM games
+        WHERE id = $1
+      `, [gameId]);
+
+    const gameState = sqlQueryGIResult.rows[0];
+
+    const endGameState = this.checkForGameEnd(gameState, playerId);
+
+    console.log("checkForGameEnd() called and endGameState set:", endGameState);
+
+    await _updateGameState();
+
+    if (endGameState.state === 1) {
+      console.log("Game has not ended so calling startTurn()");
+      // start the next turn
+      await Game.startTurn(gameId);
+    }
 
     /** Validates games is in state where a piece can be dropped by the current player. */
     function _validateGameState(): InitializedGameInterface {
@@ -719,60 +757,86 @@ class Game {
     }
 
     /** Checks for game end */
-    async function _checkForGameEnd() {
-      const sqlQueryGIResult : QueryResult<CheckGameEndInterface> = await db.query(`
-        SELECT board, played_pieces as "playedPieces"
-        FROM games
-        WHERE id = $1
-      `, [gameId]);
-
-      const gameState = sqlQueryGIResult.rows[0];
-
-      for (let i = 0; i < gameState.playedPieces.length; i++) {
-        const py = gameState.playedPieces[i][0];
-        const px = gameState.playedPieces[i][1];
-        // console.log("checking placed piece at xy", py, px);
-        // check each valid coord set for gameState piece
-        for (let j = 0; j < gameState.board[py][px].validCoordSets.length; j++) {
-          const validCoordSets = gameState.board[py][px].validCoordSets[j];
-          if (
-            validCoordSets.every(
-              c => {
-                return (
-                  gameState.board[c[0]][c[1]].playerId !== null &&
-                  gameState.board[c[0]][c[1]].playerId === playerId)
-              }
-            )
-          ) {
-            console.log("winner found");
-            const winningSet = gameState.board[py][px].validCoordSets[j];
-            await db.query(`
-              UPDATE games
-              SET
-                winning_set = $2
-                gameState = 2
-              WHERE id = $1
-            `, [gameId, winningSet]);
-            return;
-          }
-        }
+    async function _updateGameState() {
+      if (endGameState.state === 2) {
+        console.log("updating game state in DB since winner was found");
+        const winningSet = endGameState.winningSet;
+        await db.query(`
+          UPDATE games
+          SET
+            winning_set = $2
+            gameState = 2
+          WHERE id = $1
+        `, [gameId, winningSet]);
+        return;
       }
 
       // check for tie
-      if(gameState.board[0].every(cell => cell.playerId !== null)) {
+      if(endGameState.state === 3) {
+        console.log("updating game state in DB since tie was found");
         await db.query(`
-              UPDATE games
-              SET
-                gameState = 2
-              WHERE id = $1
-            `, [gameId]);
-            return;
+          UPDATE games
+          SET
+            gameState = 3
+          WHERE id = $1
+        `, [gameId]);
+        return;
       }
-
-      // start the next turn
-      await Game.startTurn(gameId);
     }
+  }
+
+  static checkForGameEnd(
+      gameState: CheckGameEndInterface,
+      playerId: string
+  ): EndGameState {
+
+    console.log("checkForGameEnd() called with gameState:", gameState);
+
+    let endGameState : EndGameState = {
+      state: 1,
+      winningSet: null
+    }
+
+    for (let i = 0; i < gameState.placedPieces.length; i++) {
+      const py = gameState.placedPieces[i][0];
+      const px = gameState.placedPieces[i][1];
+      // console.log("checking placed piece at xy", py, px);
+      // check each valid coord set for gameState piece
+      for (let j = 0; j < gameState.board[py][px].validCoordSets.length; j++) {
+        const validCoordSets = gameState.board[py][px].validCoordSets[j];
+        if (
+          validCoordSets.every(
+            c => {
+              return (
+                gameState.board[c[0]][c[1]].playerId !== null &&
+                gameState.board[c[0]][c[1]].playerId === playerId)
+            }
+          )
+        ) {
+          console.log("checkForGameEnd() determined game is won")
+          endGameState.state = 2;
+          endGameState.winningSet = gameState.board[py][px].validCoordSets[j];
+          return endGameState;
+        }
+      }
+    }
+
+    // check for tie
+    if(gameState.board[0].every(cell => cell.playerId !== null)) {
+      console.log("checkForGameEnd() determined game is tied")
+      endGameState.state = 3;
+      return endGameState;
+    }
+
+    console.log("checkForGameEnd() determined game should continue")
+    return endGameState;
   }
 }
 
-export { Game, GameInterface, NewGameInterface };
+export {
+  Game,
+  GameInterface,
+  NewGameInterface,
+  BoardCellFinalStateInterface,
+  InitializedBoardType
+};
