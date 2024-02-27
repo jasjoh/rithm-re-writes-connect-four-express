@@ -9,6 +9,8 @@ import {
   NewGameInterface
  } from "./game";
 
+ import { PlayerInterface, NewPlayerInterface, Player } from "./player";
+
 /**
  * Factory function for creating a new Game and setting it's state
  * Accepts an initial state as a matrix representing desired game state
@@ -91,6 +93,55 @@ async function createGameWithBoardState(
 
 }
 
+/**
+ * Factory function for creating one or more random players
+ * Accepts an optional count for numbers of players to create (default 1)
+ * Returns an array of player objects which have been created (PlayerInterface)
+*/
+async function createPlayers(count : number) : Promise<PlayerInterface[]> {
+  const players : PlayerInterface[] = [];
+  let counter = 1;
+  while (counter <= count) {
+    const playerData : NewPlayerInterface = {
+      name: generateRandomName(),
+      color: generateRandomHexColor(),
+      ai: false
+    }
+    const player = await Player.create(playerData);
+    players.push(player);
+  }
+  return players;
+}
+
+/** Generates a random hex color (for use in creating players) */
+function generateRandomHexColor() : string {
+  const red = Math.floor(Math.random() * 256);
+  const green = Math.floor(Math.random() * 256);
+  const blue = Math.floor(Math.random() * 256);
+
+  const hexColor = `#
+    ${red.toString(16).padStart(2, '0')}
+    ${green.toString(16).padStart(2, '0')}
+    ${blue.toString(16).padStart(2, '0')}
+  `;
+
+  return hexColor;
+}
+
+/** Generates a random all-caps string for use as a name
+ * Accepts a number for the length of the string (defaults to 6)
+ */
+function generateRandomName(length : number = 6) : string {
+  let name = '';
+  let char = 1;
+  while (char <= length) {
+    name += String.fromCharCode(Math.floor(Math.random() * 26) + 65);
+    char++;
+  }
+  return name;
+}
+
 export {
-  createGameWithBoardState
+  createGameWithBoardState,
+  createPlayers
 }

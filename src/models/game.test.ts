@@ -11,7 +11,7 @@ import {
   NewPlayerInterface,
   PlayerInterface
 } from "./player";
-import { createGameWithBoardState } from "./_factories";
+import { createGameWithBoardState, createPlayers } from "./_factories";
 import { QueryResult } from "pg";
 
 import {
@@ -91,14 +91,8 @@ describe("get game details", function () {
   test("returns initialized game", async function () {
     const boardState = Game.createInitializedBoard(boardDimensions);
     console.log("board state created:", boardState);
-
-    const playerData = {
-      name: 'foobar',
-      color: '#2b2b2b',
-      ai: false
-    };
-    const player = await Player.create(playerData);
-    const gameFromFactory = await createGameWithBoardState(boardState, player.id);
+    const players = await createPlayers(1);
+    const gameFromFactory = await createGameWithBoardState(boardState, players[0].id);
     console.log("game created using createGameWithBoardState:", gameFromFactory)
 
     const gameFromClassMethod = await Game.get(gameFromFactory.id);
