@@ -81,7 +81,8 @@ interface GamePlayersInterface {
 
 interface EndGameState {
   state: number,
-  winningSet: number[][] | null
+  winningSet: number[][] | null,
+  winningPlayerId: string | null
 }
 
 class Game {
@@ -670,7 +671,7 @@ class Game {
 
     const gameState = sqlQueryGIResult.rows[0];
 
-    const endGameState = this.checkForGameEnd(gameState, playerId);
+    const endGameState = this.checkForGameEnd(gameState);
 
     console.log("checkForGameEnd() called and endGameState set:", endGameState);
 
@@ -759,6 +760,9 @@ class Game {
     /** Checks for game end */
     async function _updateGameState() {
       if (endGameState.state === 2) {
+        if (endGameState.winningPlayerId !== playerId) {
+          throw new Error("Game is won, but not by current player. Something went wrong.")
+        }
         console.log("updating game state in DB since winner was found");
         const winningSet = endGameState.winningSet;
         await db.query(`
@@ -785,16 +789,19 @@ class Game {
     }
   }
 
-  static checkForGameEnd(
-      gameState: CheckGameEndInterface,
-      playerId: string
-  ): EndGameState {
+  /** Checks to see if a game has ended and if there is a winner, what
+   * the winning pieces are and who the winning player is.
+   * Accepts a game state (CheckEndGameInterface)
+   * Returns an end game state (EndGameState)
+   */
+  static checkForGameEnd(gameState: CheckGameEndInterface): EndGameState {
 
     console.log("checkForGameEnd() called with gameState:", gameState);
 
     let endGameState : EndGameState = {
       state: 1,
-      winningSet: null
+      winningSet: null,
+      winningPlayerId: null
     }
 
     for (let i = 0; i < gameState.placedPieces.length; i++) {
@@ -804,7 +811,8 @@ class Game {
       // check each valid coord set for gameState piece
       for (let j = 0; j < gameState.board[py][px].validCoordSets.length; j++) {
         const validCoordSets = gameState.board[py][px].validCoordSets[j];
-        if (
+        const playerId = gameState.board[validCoordSets[j][0]][validCoordSets[j][1]].playerId;
+        if ( playerId !== null &&
           validCoordSets.every(
             c => {
               return (
@@ -816,6 +824,7 @@ class Game {
           console.log("checkForGameEnd() determined game is won")
           endGameState.state = 2;
           endGameState.winningSet = gameState.board[py][px].validCoordSets[j];
+          endGameState.winningPlayerId = playerId;
           return endGameState;
         }
       }
