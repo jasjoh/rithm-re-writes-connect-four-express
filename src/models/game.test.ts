@@ -1,6 +1,12 @@
 import db from "../db";
 import { BadRequestError, NotFoundError } from "../expressError"
-import { Game, GameInterface, NewGameInterface } from "./game";
+import {
+  Game,
+  GameInterface,
+  NewGameInterface,
+  InitializedBoardType
+} from "./game";
+import { createGameWithBoardState } from "./_factories";
 import { QueryResult } from "pg";
 
 import {
@@ -81,5 +87,10 @@ describe("get game details", function () {
     const existingGame : GameInterface = await Game.get(testGameIds[0]);
     expect(existingGame).toEqual(expectedGame);
   });
+
+  test("returns initialized game", async function () {
+    const boardState : InitializedBoardType = [];
+  });
+
 });
 
