@@ -96,7 +96,9 @@ class Game {
    *
    * Returns { ... game object ... }
    * */
-  static async create(newGame: NewGameInterface = { height: 7, width: 6 }) {
+  static async create(
+    newGame: NewGameInterface = { height: 7, width: 6 }
+  ) : Promise<GameInterface> {
 
     /** TODO:
      * - input validation
@@ -132,7 +134,7 @@ class Game {
    * Retrieves an array of all games with summary information
    * Returns [{ id, gameState, createdOn }, ...]   *
    * */
-  static async getAll() {
+  static async getAll() : Promise<GameInterface[]> {
 
     const result: QueryResult<GameInterface> = await db.query(`
         SELECT
@@ -156,7 +158,7 @@ class Game {
    *
    * Throws NotFoundError if not found.
    **/
-  static async get(gameId: string) {
+  static async get(gameId: string) : Promise<GameInterface> {
     const result: QueryResult<GameInterface> = await db.query(`
         SELECT
           id,

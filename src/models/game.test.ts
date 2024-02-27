@@ -28,21 +28,20 @@ beforeEach(commonBeforeEach);
 afterEach(commonAfterEach);
 afterAll(commonAfterAll);
 
+// default board dimensions for test games; 6 x 6
+const boardDimensions = { width: 6, height: 6 };
+
 describe("create a new game", function () {
-  const newGame : NewGameInterface = {
-    height: 7,
-    width: 6
-  };
 
   test("create a game successfully", async function () {
 
     // verify game was returned from creation
-    const createdGame : GameInterface = await Game.create(newGame);
+    const createdGame = await Game.create(boardDimensions);
 
     const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
     expect(uuidRegex.test(createdGame.id)).toBe(true);
-    expect(createdGame.height).toEqual(7);
+    expect(createdGame.height).toEqual(6);
     expect(createdGame.width).toEqual(6);
     expect(createdGame.gameState).toEqual(1);
 
@@ -57,19 +56,15 @@ describe("create a new game", function () {
 });
 
 describe("get all games", function () {
-  const newGame : NewGameInterface = {
-    height: 7,
-    width: 6
-  };
 
   test("returns default games", async function () {
-    const existingGames : GameInterface[] = await Game.getAll();
+    const existingGames = await Game.getAll();
     expect(existingGames.length).toEqual(2);
   });
 
   test("returns all games including newly created ones", async function () {
-    await Game.create(newGame);
-    const existingGames : GameInterface[] = await Game.getAll();
+    await Game.create(boardDimensions);
+    const existingGames = await Game.getAll();
     expect(existingGames.length).toEqual(3);
   });
 });
@@ -94,8 +89,7 @@ describe("get game details", function () {
   });
 
   test("returns initialized game", async function () {
-    const boardDimension = { width: 6, height: 6 };
-    const boardState = Game.createInitializedBoard(boardDimension);
+    const boardState = Game.createInitializedBoard(boardDimensions);
     console.log("board state created:", boardState);
 
     const playerData = {
@@ -110,6 +104,20 @@ describe("get game details", function () {
     const gameFromClassMethod = await Game.get(gameFromFactory.id);
     console.log("existingGame retrieved using ID from created game:", gameFromClassMethod)
     expect(gameFromClassMethod).toEqual(expect.objectContaining(gameFromFactory));
+  });
+});
+
+describe("delete game", function () {
+
+  test("deletes default game", async function () {
+
+    let existingGames = await Game.getAll();
+    const gameToDeleteId = existingGames[0].id;
+    Game.delete(gameToDeleteId);
+    existingGames = await Game.getAll();
+    expect(existingGames[0].id).not.toEqual(gameToDeleteId);
+    expect(existingGames.length).toEqual(1);
+
   });
 
 });
