@@ -2,9 +2,11 @@ import db from "../db";
 import { QueryResult } from "pg";
 
 import {
+  BoardCellFinalStateInterface,
   Game,
   GameInterface,
-  InitializedBoardType
+  InitializedBoardType,
+  NewGameInterface
  } from "./game";
 
 /**
@@ -17,6 +19,7 @@ async function createGameWithBoardState(
     currPlayerId: string
   ): Promise<GameInterface> {
 
+  console.log("createGameWithBoardState factory function called");
   _validateBoardState();
 
   const boardDimensions = {
@@ -27,7 +30,7 @@ async function createGameWithBoardState(
   // populate placedPieces based on boardState
   const placedPieces : number[][] = [];
   for (let y = 0; y < boardState.length; y++) {
-    for (let x = 0; x < boardState[y].length; y++) {
+    for (let x = 0; x < boardState[y].length; x++) {
       if (boardState[y][x].playerId !== null) {
         placedPieces.push([y, x]);
       }
@@ -51,7 +54,17 @@ async function createGameWithBoardState(
                 VALUES  (
                           $1, $2, $3, $4, $5, $6, $7
                         )
-                RETURNING *`, [
+                RETURNING
+                  id,
+                  height,
+                  width,
+                  game_state as "gameState",
+                  placed_pieces as "placedPieces",
+                  board,
+                  winning_set as "winningSet",
+                  curr_player_id as "currPlayerId",
+                  created_on as "createdOn"
+                  `, [
       boardDimensions.height,
       boardDimensions.width,
       gameState.state,
@@ -61,6 +74,7 @@ async function createGameWithBoardState(
       currPlayerId
     ],
   );
+  console.log("SQL result from attempting to create a game:", result);
 
   const game = result.rows[0];
 
@@ -68,8 +82,9 @@ async function createGameWithBoardState(
 
   function _validateBoardState() {
     for (let row of boardState) {
-      if (!row.every(c => { c.playerId !== undefined })) {
-        throw new Error("Invalid initial board state. Is not of type InitialBoardType.")
+      const allNotUndefined = row.every(c => c.playerId !== undefined );
+      if (!allNotUndefined) {
+        throw new Error("Invalid initial board state. Some playerId values were undefined.")
       }
     }
   }

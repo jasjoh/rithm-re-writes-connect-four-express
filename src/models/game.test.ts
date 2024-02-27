@@ -6,6 +6,11 @@ import {
   NewGameInterface,
   InitializedBoardType
 } from "./game";
+import {
+  Player,
+  NewPlayerInterface,
+  PlayerInterface
+} from "./player";
 import { createGameWithBoardState } from "./_factories";
 import { QueryResult } from "pg";
 
@@ -84,12 +89,27 @@ describe("get game details", function () {
       createdOn: expect.any(Date),
       totalPlayers: expect.any(Number)
     }
-    const existingGame : GameInterface = await Game.get(testGameIds[0]);
+    const existingGame = await Game.get(testGameIds[0]);
     expect(existingGame).toEqual(expectedGame);
   });
 
   test("returns initialized game", async function () {
-    const boardState : InitializedBoardType = [];
+    const boardDimension = { width: 6, height: 6 };
+    const boardState = Game.createInitializedBoard(boardDimension);
+    console.log("board state created:", boardState);
+
+    const playerData = {
+      name: 'foobar',
+      color: '#2b2b2b',
+      ai: false
+    };
+    const player = await Player.create(playerData);
+    const gameFromFactory = await createGameWithBoardState(boardState, player.id);
+    console.log("game created using createGameWithBoardState:", gameFromFactory)
+
+    const gameFromClassMethod = await Game.get(gameFromFactory.id);
+    console.log("existingGame retrieved using ID from created game:", gameFromClassMethod)
+    expect(gameFromClassMethod).toEqual(expect.objectContaining(gameFromFactory));
   });
 
 });

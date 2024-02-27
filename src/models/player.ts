@@ -31,7 +31,7 @@ class Player {
    * Returns { id, name, color, ai, createdOn }
    * */
 
-  static async create(newPlayer: NewPlayerInterface) {
+  static async create(newPlayer: NewPlayerInterface) : Promise<PlayerInterface> {
 
     const result = await db.query(`
                 INSERT INTO players (name,
@@ -50,9 +50,7 @@ class Player {
         ],
     );
 
-    const player = result.rows[0];
-    console.log("TO BE TYPED: result.rows[0] in Player.create");
-
+    const player : PlayerInterface = result.rows[0];
     return player;
   }
 
@@ -83,7 +81,7 @@ class Player {
    * Throws NotFoundError if not found.
    **/
 
-  static async get(id: string) {
+  static async get(id: string) : Promise<PlayerInterface> {
     const result = await db.query(`
         SELECT id,
                name,
@@ -94,7 +92,7 @@ class Player {
         WHERE id = $1
         ORDER BY created_on`, [id]);
 
-    const player = result.rows[0];
+    const player : PlayerInterface = result.rows[0];
 
     if (!player) throw new NotFoundError(`No player with id: ${id}`);
 
@@ -119,4 +117,4 @@ class Player {
   }
 }
 
-export { Player, PlayerInterface };
+export { Player, NewPlayerInterface, PlayerInterface };
