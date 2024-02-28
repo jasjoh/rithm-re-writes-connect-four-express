@@ -127,12 +127,12 @@ describe("add player to game", function () {
 
     const players = await createPlayers(1);
     const existingGames = await Game.getAll();
-
     expect(existingGames[0].totalPlayers).toEqual(0);
 
-    await Game.addPlayers([players[0].id], existingGames[0].id);
-    const gameWithPlayer = await Game.get(existingGames[0].id);
+    const playerCount = await Game.addPlayers([players[0].id], existingGames[0].id);
+    expect(playerCount).toEqual(1);
 
+    const gameWithPlayer = await Game.get(existingGames[0].id);
     expect(gameWithPlayer.totalPlayers).toEqual(1);
   });
 
@@ -140,12 +140,12 @@ describe("add player to game", function () {
 
     const players = await createPlayers(1);
     const existingGames = await Game.getAll();
-
     expect(existingGames[0].totalPlayers).toEqual(0);
 
-    await Game.addPlayers([players[0].id], existingGames[0].id);
-    const gameWithPlayer = await Game.get(existingGames[0].id);
+    const playerCount = await Game.addPlayers([players[0].id], existingGames[0].id);
+    expect(playerCount).toEqual(1);
 
+    const gameWithPlayer = await Game.get(existingGames[0].id);
     expect(gameWithPlayer.totalPlayers).toEqual(1);
 
     try {

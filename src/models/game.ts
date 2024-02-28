@@ -236,7 +236,7 @@ class Game {
     }
 
     const result: QueryResult<CountResultInterface> = await db.query(`
-        SELECT COUNT(*)
+        SELECT COUNT(*)::int
         FROM game_players
         WHERE game_id = $1
     `, [gameId]);
