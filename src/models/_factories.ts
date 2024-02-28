@@ -76,7 +76,7 @@ async function createGameWithBoardState(
       currPlayerId
     ],
   );
-  console.log("SQL result from attempting to create a game:", result);
+  // console.log("SQL result from attempting to create a game:", result);
 
   const game = result.rows[0];
 
@@ -98,7 +98,8 @@ async function createGameWithBoardState(
  * Accepts an optional count for numbers of players to create (default 1)
  * Returns an array of player objects which have been created (PlayerInterface)
 */
-async function createPlayers(count : number) : Promise<PlayerInterface[]> {
+async function createPlayers(count : number = 1) : Promise<PlayerInterface[]> {
+  console.log("createPlayers factory function called");
   const players : PlayerInterface[] = [];
   let counter = 1;
   while (counter <= count) {
@@ -109,6 +110,7 @@ async function createPlayers(count : number) : Promise<PlayerInterface[]> {
     }
     const player = await Player.create(playerData);
     players.push(player);
+    counter++;
   }
   return players;
 }
@@ -119,11 +121,9 @@ function generateRandomHexColor() : string {
   const green = Math.floor(Math.random() * 256);
   const blue = Math.floor(Math.random() * 256);
 
-  const hexColor = `#
-    ${red.toString(16).padStart(2, '0')}
-    ${green.toString(16).padStart(2, '0')}
-    ${blue.toString(16).padStart(2, '0')}
-  `;
+  const hexColor = `#${red.toString(16).padStart(2, '0')}` +
+    `${green.toString(16).padStart(2, '0')}` +
+    `${blue.toString(16).padStart(2, '0')}`;
 
   return hexColor;
 }

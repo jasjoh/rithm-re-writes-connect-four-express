@@ -92,6 +92,7 @@ describe("get game details", function () {
     const boardState = Game.createInitializedBoard(boardDimensions);
     console.log("board state created:", boardState);
     const players = await createPlayers(1);
+    console.log("players created:", players)
     const gameFromFactory = await createGameWithBoardState(boardState, players[0].id);
     console.log("game created using createGameWithBoardState:", gameFromFactory)
 
@@ -112,6 +113,23 @@ describe("delete game", function () {
     expect(existingGames[0].id).not.toEqual(gameToDeleteId);
     expect(existingGames.length).toEqual(1);
 
+  });
+
+});
+
+describe("add player to game", function () {
+
+  test("successfully adds a player", async function () {
+
+    const players = await createPlayers(1);
+    const existingGames = await Game.getAll();
+
+    expect(existingGames[0].totalPlayers).toEqual(0);
+
+    await Game.addPlayers([players[0].id], existingGames[0].id);
+    const gameWithPlayer = await Game.get(existingGames[0].id);
+
+    expect(gameWithPlayer.totalPlayers).toEqual(1);
   });
 
 });

@@ -141,7 +141,7 @@ class Game {
           id,
           game_state AS "gameState",
           created_on AS "createdOn",
-          COUNT(game_players.game_id) AS "totalPlayers"
+          COUNT(game_players.game_id)::int AS "totalPlayers"
         FROM games
         LEFT JOIN game_players on games.id = game_players.game_id
         GROUP BY games.id, games.game_state, games.created_on
