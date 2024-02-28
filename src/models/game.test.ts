@@ -26,6 +26,7 @@ import {
   testGameIds,
   testPlayerIds
 } from "./_testCommon";
+import { randomUUID } from "crypto";
 
 beforeAll(commonBeforeAll);
 beforeEach(commonBeforeEach);
@@ -94,14 +95,14 @@ describe("get game details", function () {
 
   test("returns initialized game", async function () {
     const boardState = Game.createInitializedBoard(boardDimensions);
-    console.log("board state created:", boardState);
+    // console.log("board state created:", boardState);
     const players = await createPlayers(1);
-    console.log("players created:", players)
+    // console.log("players created:", players)
     const gameFromFactory = await createGameWithBoardState(boardState, players[0].id);
-    console.log("game created using createGameWithBoardState:", gameFromFactory)
+    // console.log("game created using createGameWithBoardState:", gameFromFactory)
 
     const gameFromClassMethod = await Game.get(gameFromFactory.id);
-    console.log("existingGame retrieved using ID from created game:", gameFromClassMethod)
+    // console.log("existingGame retrieved using ID from created game:", gameFromClassMethod)
     expect(gameFromClassMethod).toEqual(expect.objectContaining(gameFromFactory));
   });
 });
@@ -109,14 +110,12 @@ describe("get game details", function () {
 describe("delete game", function () {
 
   test("deletes default game", async function () {
-
     let existingGames = await Game.getAll();
     const gameToDeleteId = existingGames[0].id;
     Game.delete(gameToDeleteId);
     existingGames = await Game.getAll();
     expect(existingGames[0].id).not.toEqual(gameToDeleteId);
     expect(existingGames.length).toEqual(1);
-
   });
 
 });
@@ -153,10 +152,37 @@ describe("add player to game", function () {
     } catch (error : any) {
       expect(error).toBeInstanceOf(PlayerAlreadyExists);
     }
+  });
+
+});
+
+describe("remove player from game", function () {
+
+  test("successfully remove a player", async function () {
+
+    const players = await createPlayers(1);
+    const existingGames = await Game.getAll();
+    expect(existingGames[0].totalPlayers).toEqual(0);
+
+    let playerCount = await Game.addPlayers([players[0].id], existingGames[0].id);
+    expect(playerCount).toEqual(1);
+
+    playerCount = await Game.removePlayer(players[0].id, existingGames[0].id);
+    expect(playerCount).toEqual(0);
 
   });
 
+  test("throws exception removing non-existing player", async function () {
 
+    const existingGames = await Game.getAll();
+    expect(existingGames[0].totalPlayers).toEqual(0);
+
+    try {
+      await Game.removePlayer(randomUUID(), existingGames[0].id);
+    } catch (error : any) {
+      expect(error).toBeInstanceOf(NotFoundError);
+    }
+  });
 
 });
 

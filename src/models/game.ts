@@ -206,7 +206,7 @@ class Game {
    * Throws error if game or player doesn't exist or player already added
    * Returns current player count if successful
    */
-  static async addPlayers(players: string[], gameId: string) {
+  static async addPlayers(players: string[], gameId: string) : Promise<number> {
 
     let sqlQueryValues: string = '';
 
@@ -246,18 +246,28 @@ class Game {
   }
 
   /**
-   * Removes a player from a game; returns undefined.   *
+   * Removes a player from a game; returns undefined.
    * Throws NotFoundError if game or player not found.
+   * Returns an updated count of players in the game if successful.
    **/
-  static async removePlayer(playerId: string, gameId: string) {
-    const result: QueryResult<GamePlayersInterface> = await db.query(`
+  static async removePlayer(playerId: string, gameId: string) : Promise<number> {
+    const queryGPIResult: QueryResult<GamePlayersInterface> = await db.query(`
         DELETE
         FROM game_players
         WHERE player_id = $1 AND game_id = $2
         RETURNING player_id as "playerId"`, [playerId, gameId]);
-    const removedPlayer = result.rows[0];
+    const removedPlayer = queryGPIResult.rows[0];
 
     if (!removedPlayer) throw new NotFoundError(`No such player or game.`);
+
+    const queryCRIResult: QueryResult<CountResultInterface> = await db.query(`
+        SELECT COUNT(*)::int
+        FROM game_players
+        WHERE game_id = $1
+    `, [gameId]);
+    console.log("result of getting count from game_players:", queryCRIResult);
+
+    return queryCRIResult.rows[0].count;
   }
 
   /** Adds a player to an existing game
