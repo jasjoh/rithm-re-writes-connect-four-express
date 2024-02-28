@@ -48,7 +48,7 @@ describe("create a new game", function () {
     expect(uuidRegex.test(createdGame.id)).toBe(true);
     expect(createdGame.height).toEqual(6);
     expect(createdGame.width).toEqual(6);
-    expect(createdGame.gameState).toEqual(1);
+    expect(createdGame.gameState).toEqual(0);
 
     // verify game exists in database
     const result : QueryResult<GameInterface> = await db.query(`
@@ -81,7 +81,7 @@ describe("get game details", function () {
       id: testGameIds[0],
       width: expect.any(Number),
       height: expect.any(Number),
-      gameState: 1,
+      gameState: 0,
       placedPieces: null,
       board: null,
       winningSet: null,
@@ -182,6 +182,71 @@ describe("remove player from game", function () {
     } catch (error : any) {
       expect(error).toBeInstanceOf(NotFoundError);
     }
+  });
+
+});
+
+describe("get list of players in game", function () {
+
+  test("successfully get list of players", async function () {
+
+    const players = await createPlayers(2);
+    const existingGames = await Game.getAll();
+    expect(existingGames[0].totalPlayers).toEqual(0);
+
+    await Game.addPlayers([players[0].id], existingGames[0].id);
+    await Game.addPlayers([players[1].id], existingGames[0].id);
+
+    const addedPlayers = await Game.getPlayers(existingGames[0].id);
+    expect(addedPlayers.length).toEqual(2);
+
+  });
+
+});
+
+describe("start a game", function () {
+
+  test("successfully starts a game", async function () {
+
+    const players = await createPlayers(2);
+    const existingGames = await Game.getAll();
+    const gameToStart = existingGames[0];
+
+    expect(gameToStart.gameState).toEqual(0);
+
+    await Game.addPlayers([players[0].id], gameToStart.id);
+    await Game.addPlayers([players[1].id], gameToStart.id);
+    await Game.start(gameToStart.id);
+
+    const startedGame = await Game.get(gameToStart.id);
+    expect(startedGame.gameState).toEqual(1);
+
+  });
+
+  test("throws error if no game exists", async function () {
+    try {
+      await Game.start(randomUUID());
+    } catch(error : any) {
+      expect(error).toBeInstanceOf(NotFoundError);
+    }
+  });
+
+  test("throws error if too few players", async function () {
+
+    const players = await createPlayers(1);
+    const existingGames = await Game.getAll();
+    const gameToStart = existingGames[0];
+
+    expect(gameToStart.gameState).toEqual(0);
+
+    await Game.addPlayers([players[0].id], gameToStart.id);
+
+    try {
+      await Game.start(gameToStart.id);
+    } catch(error : any) {
+      expect(error).toBeInstanceOf(TooFewPlayers);
+    }
+
   });
 
 });

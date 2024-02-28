@@ -13,7 +13,7 @@ CREATE TABLE games (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   width INTEGER DEFAULT 7 NOT NULL,
   height INTEGER DEFAULT 6 NOT NULL,
-  game_state INTEGER DEFAULT 1 NOT NULL,
+  game_state INTEGER DEFAULT 0 NOT NULL,
   placed_pieces INTEGER[][],
   board JSONB[][],
   winning_set INTEGER[][],
