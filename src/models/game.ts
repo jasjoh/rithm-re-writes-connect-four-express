@@ -180,7 +180,7 @@ class Game {
     `, [gameId]);
 
     const game = result.rows[0];
-    console.log("game found:", game);
+    // console.log("game found:", game);
 
     if (!game) throw new NotFoundError(`No game with id: ${gameId}`);
 
@@ -240,7 +240,7 @@ class Game {
         FROM game_players
         WHERE game_id = $1
     `, [gameId]);
-    console.log("result of getting count from game_players:", result);
+    // console.log("result of getting count from game_players:", result);
 
     return result.rows[0].count;
   }
@@ -289,9 +289,9 @@ class Game {
     return result.rows;
   }
 
-  /** Starts a game.
-   * Initializes / resets game state and then calls startTurn
-   * Throws error is there are insufficient players to start a game or game
+  /** Starts a game (conductor function)
+   * Initializes / resets game state and then starts the initial turn
+   * Throws error if there are insufficient players to start a game or game
    * doesn't exist
    * Returns undefined
   */
@@ -300,6 +300,7 @@ class Game {
     // verify game exists
     const queryGIResult: QueryResult<GameInterface> = await db.query(`
         SELECT
+          id,
           height,
           width
         FROM games
@@ -317,8 +318,17 @@ class Game {
       throw new TooFewPlayers(`Game (${gameId}) has too few players to be started.`);
     }
 
-    // initialize the board and reset game state
-    const board = this.createInitializedBoard({height: game.height, width: game.width});
+    // start the next turn
+    await Game.initializeGame(game);
+    await Game.startTurn(gameId);
+    return undefined;
+  }
+
+  /** Creates the initial game board and updated game state */
+  static async initializeGame(game : GameInterface) : Promise<undefined> {
+    console.log("initializeGame called");
+
+    const board = Game.createInitializedBoard({height: game.height, width: game.width});
     await db.query(`
         UPDATE games
         SET
@@ -327,12 +337,8 @@ class Game {
           placed_pieces = DEFAULT,
           winning_set = DEFAULT,
           curr_player_id = DEFAULT
-        WHERE id = $1`, [gameId, board]
+        WHERE id = $1`, [game.id, board]
     );
-
-    // start the next turn
-    await Game.startTurn(gameId);
-    return undefined;
   }
 
   /**
