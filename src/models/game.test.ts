@@ -216,7 +216,7 @@ describe("start a game", function () {
 
     await Game.addPlayers([players[0].id], gameToStart.id);
     await Game.addPlayers([players[1].id], gameToStart.id);
-    await Game.start(gameToStart.id);
+    await Game.start(gameToStart.id, false);
 
     const startedGame = await Game.get(gameToStart.id);
     expect(startedGame.gameState).toEqual(1);
@@ -225,7 +225,7 @@ describe("start a game", function () {
 
   test("throws error if no game exists", async function () {
     try {
-      await Game.start(randomUUID());
+      await Game.start(randomUUID(), false);
     } catch(error : any) {
       expect(error).toBeInstanceOf(NotFoundError);
     }
@@ -242,7 +242,7 @@ describe("start a game", function () {
     await Game.addPlayers([players[0].id], gameToStart.id);
 
     try {
-      await Game.start(gameToStart.id);
+      await Game.start(gameToStart.id, false);
     } catch(error : any) {
       expect(error).toBeInstanceOf(TooFewPlayers);
     }
@@ -250,4 +250,8 @@ describe("start a game", function () {
   });
 
 });
+
+
+
+
 

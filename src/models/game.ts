@@ -290,12 +290,13 @@ class Game {
   }
 
   /** Starts a game (conductor function)
-   * Initializes / resets game state and then starts the initial turn
+   * Initializes / resets game state and then starts the initial turn (unless
+   * indicated otherwise.)
    * Throws error if there are insufficient players to start a game or game
    * doesn't exist
    * Returns undefined
   */
-  static async start(gameId: string) : Promise<undefined> {
+  static async start(gameId: string, startTurn : boolean = true) : Promise<undefined> {
 
     // verify game exists
     const queryGIResult: QueryResult<GameInterface> = await db.query(`
@@ -320,7 +321,7 @@ class Game {
 
     // start the next turn
     await Game.initializeGame(game);
-    await Game.startTurn(gameId);
+    if (startTurn) await Game.startTurn(gameId);
     return undefined;
   }
 
