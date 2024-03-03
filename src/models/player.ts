@@ -115,6 +115,7 @@ class Player {
 
     if (!player) throw new NotFoundError(`No player: ${id}`);
   }
+
 }
 
 export { Player, NewPlayerInterface, PlayerInterface };

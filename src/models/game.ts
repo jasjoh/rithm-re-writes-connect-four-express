@@ -47,7 +47,7 @@ type BoardCellStateType = BoardCellFinalStateInterface | null;
 // an initialized board full of finalized board cells
 type InitializedBoardType = BoardCellFinalStateInterface[][];
 
-interface NewGameInterface {
+interface BoardDimensionsInterface {
   height: number;
   width: number;
 }
@@ -99,7 +99,7 @@ class Game {
    * Returns { ... game object ... }
    * */
   static async create(
-    newGame: NewGameInterface = { height: 7, width: 6 }
+    newGame: BoardDimensionsInterface = { height: 7, width: 6 }
   ) : Promise<GameInterface> {
 
     /** TODO:
@@ -725,10 +725,10 @@ class Game {
   }
 
   /** Creates an initialized game board (full of cells in a final state)
-   * Accepts dimensions for the board as a NewGameInterface
+   * Accepts dimensions for the board as a BoardDimensionsInterface
    * Returns the newly initialized boards as an InitializedBoardType
    */
-  static createInitializedBoard(boardDimensions : NewGameInterface) : InitializedBoardType {
+  static createInitializedBoard(boardDimensions : BoardDimensionsInterface) : InitializedBoardType {
 
     const newBoardState: BoardCellStateType[][] = [];
 
@@ -840,10 +840,72 @@ class Game {
   }
 }
 
+/**
+ * Generates a initialized game board as specified
+ * Accepts:
+ * - array of playerIds to simulate turns for (required)
+ * - if a winner should exist, that player's id (optional)
+ * - if the game should be a tie (true / false, optional)
+ * - how many turns should be taken (optional)
+ * Returns an InitializedBoardType with valid params
+ */
+function generateBoardState(
+  boardDimensions : BoardDimensionsInterface,
+  playerIds : string[],
+  winnerId? : string,
+  tie? : boolean,
+  turns? : number
+) : InitializedBoardType {
+  // TODO: Add support for arbitrary number of turns in random order
+  // TODO: Implement more realistic winning board state
+  let board = Game.createInitializedBoard(boardDimensions);
+  let currPlayerId = playerIds[0];
+
+  // see if we want to create a winning state
+  if (winnerId !== undefined) {
+    if (!playerIds.includes(winnerId)) {
+      throw new Error("Specified winner player ID is not part of provided list of player IDs.");
+    }
+    // create four in a row for the winning player ID
+    let counter = 0;
+    while (counter <= 3) {
+      board[boardDimensions.height - 1][counter].playerId = winnerId;
+      counter++;
+    }
+    return board;
+  }
+
+  // see if we want to create a tie
+  if (tie) {
+    if (playerIds.length < 2) {
+      throw new Error("In order to create a tie there must be 2 or more players.")
+    }
+
+    for (let y = 0; y < boardDimensions.height; y++) {
+      for (let x = 0; x < boardDimensions.width; x++) {
+        board[y][x].playerId = playerIds[0];
+        _cyclePlayers();
+      }
+    }
+    return board;
+  }
+  return board;
+
+ function _cyclePlayers() {
+  const currPlayerIndex = playerIds.indexOf(currPlayerId);
+  if(currPlayerIndex === playerIds.length - 1) {
+    currPlayerId = playerIds[0];
+  } else {
+    currPlayerId = playerIds[currPlayerIndex + 1];
+  }
+ }
+}
+
 export {
   Game,
   GameInterface,
-  NewGameInterface,
+  BoardDimensionsInterface,
   BoardCellFinalStateInterface,
-  InitializedBoardType
+  InitializedBoardType,
+  generateBoardState
 };

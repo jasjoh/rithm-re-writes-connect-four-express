@@ -1,10 +1,11 @@
 import db from "../db";
-import { BadRequestError, NotFoundError } from "../expressError"
+import { BadRequestError, NotFoundError } from "../expressError";
 import {
   Game,
   GameInterface,
-  NewGameInterface,
-  InitializedBoardType
+  BoardDimensionsInterface,
+  InitializedBoardType,
+  generateBoardState
 } from "./game";
 import {
   Player,
@@ -52,11 +53,11 @@ describe("create a new game", function () {
     expect(createdGame.gameState).toEqual(0);
 
     // verify game exists in database
-    const result : QueryResult<GameInterface> = await db.query(`
+    const result: QueryResult<GameInterface> = await db.query(`
       SELECT id
       FROM games
       WHERE id = $1
-    `,[createdGame.id]);
+    `, [createdGame.id]);
     expect(result.rows[0].id).toEqual(createdGame.id);
   });
 });
@@ -78,7 +79,7 @@ describe("get all games", function () {
 describe("get game details", function () {
 
   test("returns default game", async function () {
-    const expectedGame : GameInterface = {
+    const expectedGame: GameInterface = {
       id: testGameIds[0],
       width: expect.any(Number),
       height: expect.any(Number),
@@ -89,7 +90,7 @@ describe("get game details", function () {
       currPlayerId: null,
       createdOn: expect.any(Date),
       totalPlayers: expect.any(Number)
-    }
+    };
     const existingGame = await Game.get(testGameIds[0]);
     expect(existingGame).toEqual(expectedGame);
   });
@@ -150,7 +151,7 @@ describe("add player to game", function () {
 
     try {
       await Game.addPlayers([players[0].id], existingGames[0].id);
-    } catch (error : any) {
+    } catch (error: any) {
       expect(error).toBeInstanceOf(PlayerAlreadyExists);
     }
   });
@@ -180,7 +181,7 @@ describe("remove player from game", function () {
 
     try {
       await Game.removePlayer(randomUUID(), existingGames[0].id);
-    } catch (error : any) {
+    } catch (error: any) {
       expect(error).toBeInstanceOf(NotFoundError);
     }
   });
@@ -226,7 +227,7 @@ describe("start a game", function () {
   test("throws error if no game exists", async function () {
     try {
       await Game.start(randomUUID(), false);
-    } catch(error : any) {
+    } catch (error: any) {
       expect(error).toBeInstanceOf(NotFoundError);
     }
   });
@@ -243,7 +244,7 @@ describe("start a game", function () {
 
     try {
       await Game.start(gameToStart.id, false);
-    } catch(error : any) {
+    } catch (error: any) {
       expect(error).toBeInstanceOf(TooFewPlayers);
     }
   });
@@ -265,7 +266,7 @@ describe("start a game", function () {
 
     const gamePlayers = await Game.getPlayers(gameToStart.id);
     for (let gp of gamePlayers) {
-      expect(gp.playOrder).toBeNull()
+      expect(gp.playOrder).toBeNull();
     }
   });
 
@@ -286,7 +287,7 @@ describe("start a game", function () {
 
     const gamePlayers = await Game.getPlayers(gameToStart.id);
     for (let gp of gamePlayers) {
-      expect(gp.playOrder).not.toBeNull()
+      expect(gp.playOrder).not.toBeNull();
     }
   });
 
@@ -317,11 +318,20 @@ describe("drops piece", function () {
     // test placed pieces
     const placedPieces = game.placedPieces as number[][];
     expect(placedPieces[0]).toEqual([gameBoard.length - 1, 0]);
+  });
+
+  test("successfully detects a won game", async function () {
+    const boardState = generateBoardState(boardDimensions, testPlayerIds, testPlayerIds[0]);
+    console.log("won game test boardState:", boardState);
+    const game = await createGameWithBoardState(boardState, testPlayerIds[0]);
+    console.log("won game test game object:", game);
+    // TODO: Finish this once we have a just-about-to-be-won game.
 
   });
 
-});
 
+
+});
 
 describe("game turns retrieval", function () {
 
@@ -350,7 +360,3 @@ describe("game turns retrieval", function () {
   });
 
 });
-
-
-
-
