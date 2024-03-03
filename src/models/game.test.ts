@@ -27,6 +27,7 @@ import {
   testPlayerIds
 } from "./_testCommon";
 import { randomUUID } from "crypto";
+import exp from "constants";
 
 beforeAll(commonBeforeAll);
 beforeEach(commonBeforeEach);
@@ -291,6 +292,35 @@ describe("start a game", function () {
 
 });
 
+describe("drops piece", function () {
+
+  test("successfully drop piece", async function () {
+
+    // setup a game and start it
+    const players = await createPlayers(2);
+    const games = await Game.getAll();
+    let game = games[0];
+    await Game.addPlayers([players[0].id], game.id);
+    await Game.addPlayers([players[1].id], game.id);
+    await Game.start(game.id);
+    game = await Game.get(game.id);
+    const currPlayerId = game.currPlayerId as string;
+
+    await Game.dropPiece(game.id, currPlayerId, 0);
+    game = await Game.get(game.id);
+
+    // test game board
+    const gameBoard = game.board as InitializedBoardType;
+    const cellToTest = gameBoard[gameBoard.length - 1][0];
+    expect(cellToTest.playerId).toBe(currPlayerId);
+
+    // test placed pieces
+    const placedPieces = game.placedPieces as number[][];
+    expect(placedPieces[0]).toEqual([gameBoard.length - 1, 0]);
+
+  });
+
+});
 
 
 
