@@ -29,7 +29,8 @@ CREATE TABLE game_players (
     REFERENCES games ON DELETE CASCADE,
   play_order INTEGER,
   PRIMARY KEY (player_id, game_id),
-  UNIQUE (player_id, game_id)
+  UNIQUE (player_id, game_id),
+  UNIQUE (game_id, play_order)
 );
 
 -- We don't want to delete the turn when a player is deleted (it still happened)

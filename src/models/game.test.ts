@@ -206,7 +206,7 @@ describe("get list of players in game", function () {
 
 describe("start a game", function () {
 
-  test("successfully starts a game", async function () {
+  test("successfully updates game state", async function () {
 
     const players = await createPlayers(2);
     const existingGames = await Game.getAll();
@@ -220,7 +220,6 @@ describe("start a game", function () {
 
     const startedGame = await Game.get(gameToStart.id);
     expect(startedGame.gameState).toEqual(1);
-
   });
 
   test("throws error if no game exists", async function () {
@@ -246,7 +245,48 @@ describe("start a game", function () {
     } catch(error : any) {
       expect(error).toBeInstanceOf(TooFewPlayers);
     }
+  });
 
+  test("does not start a turn when instructed not to", async function () {
+
+    const players = await createPlayers(2);
+    const existingGames = await Game.getAll();
+    const gameToStart = existingGames[0];
+
+    expect(gameToStart.gameState).toEqual(0);
+
+    await Game.addPlayers([players[0].id], gameToStart.id);
+    await Game.addPlayers([players[1].id], gameToStart.id);
+    await Game.start(gameToStart.id, false);
+
+    const startedGame = await Game.get(gameToStart.id);
+    expect(startedGame.currPlayerId).toBeNull();
+
+    const gamePlayers = await Game.getPlayers(gameToStart.id);
+    for (let gp of gamePlayers) {
+      expect(gp.playOrder).toBeNull()
+    }
+  });
+
+  test("starts a turn when NOT instructed not to", async function () {
+
+    const players = await createPlayers(2);
+    const existingGames = await Game.getAll();
+    const gameToStart = existingGames[0];
+
+    expect(gameToStart.gameState).toEqual(0);
+
+    await Game.addPlayers([players[0].id], gameToStart.id);
+    await Game.addPlayers([players[1].id], gameToStart.id);
+    await Game.start(gameToStart.id);
+
+    const startedGame = await Game.get(gameToStart.id);
+    expect(startedGame.currPlayerId).not.toBeNull();
+
+    const gamePlayers = await Game.getPlayers(gameToStart.id);
+    for (let gp of gamePlayers) {
+      expect(gp.playOrder).not.toBeNull()
+    }
   });
 
 });
