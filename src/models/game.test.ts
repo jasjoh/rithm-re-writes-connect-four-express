@@ -323,5 +323,34 @@ describe("drops piece", function () {
 });
 
 
+describe("game turns retrieval", function () {
+
+  test("successfully return no turn when not have transpired", async function () {
+
+    const games = await Game.getAll();
+    let game = games[0];
+    expect(await Game.getTurns(game.id)).toEqual([]);
+  });
+
+  test("successfully returns correct number of turns", async function () {
+
+    // setup a game, start it and take a turn
+    const players = await createPlayers(2);
+    const games = await Game.getAll();
+    let game = games[0];
+    await Game.addPlayers([players[0].id], game.id);
+    await Game.addPlayers([players[1].id], game.id);
+    await Game.start(game.id);
+    game = await Game.get(game.id);
+    const currPlayerId = game.currPlayerId as string;
+    await Game.dropPiece(game.id, currPlayerId, 0);
+
+    const gameTurns = await Game.getTurns(game.id);
+    expect(gameTurns.length).toBe(1);
+  });
+
+});
+
+
 
 

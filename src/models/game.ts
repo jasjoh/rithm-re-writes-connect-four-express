@@ -79,10 +79,14 @@ interface GamePlayersInterface extends PlayerInterface {
   playOrder: number | null;
 }
 
-interface EndGameState {
+interface EndGameStateInterface {
   state: number,
   winningSet: number[][] | null,
   winningPlayerId: string | null
+}
+
+interface GameTurnInterface {
+
 }
 
 class Game {
@@ -463,6 +467,28 @@ class Game {
   }
 
   /**
+   * Retrieves the game turns for a given game ID
+   * Game turns are an array of { id, playerId, gameId, location, createOnEpoch }
+   * If not no game turns exist, returns null
+   */
+  static async getTurns(gameId: string) : Promise<GameTurnInterface[]> {
+    // console.log("getTurns() called");
+    let sqlQuery =
+    `
+      SELECT *
+      FROM game_turns
+      WHERE game_id = $1
+    `
+    const queryResult : QueryResult<GameTurnInterface> = await db.query(
+      sqlQuery,
+      [gameId]
+    );
+    const gameTurns = queryResult.rows;
+    // console.log("getTurns() query results:", gameTurns);
+    return gameTurns;
+  }
+
+  /**
    * Attempts to drop a piece on behalf of a player at a given column
    * Accepts a game ID, player ID and column to drop in
    * If successful, adds turn record and checks for game end
@@ -649,13 +675,13 @@ class Game {
   /** Checks to see if a game has ended and if there is a winner, what
    * the winning pieces are and who the winning player is.
    * Accepts a game state (CheckEndGameInterface)
-   * Returns an end game state (EndGameState)
+   * Returns an end game state (EndGameStateInterface)
    */
-  static checkForGameEnd(gameState: CheckGameEndInterface): EndGameState {
+  static checkForGameEnd(gameState: CheckGameEndInterface): EndGameStateInterface {
 
     console.log("checkForGameEnd() called with gameState:", gameState);
 
-    let endGameState : EndGameState = {
+    let endGameState : EndGameStateInterface = {
       state: 1,
       winningSet: null,
       winningPlayerId: null
