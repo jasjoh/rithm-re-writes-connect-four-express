@@ -365,33 +365,28 @@ class Game {
     let currPlayerId = game.currPlayerId;
 
     if (currPlayerId === null) {
-      console.log("No current player found. Establishing player order curr player.");
-
-      newGame = true;
-      await _setRandomFirstPlayer();
+      console.log("No current player found. Establishing player order.");
+      await _setPlayOrder();
     }
 
     // get updated game and game player data
     game = await Game.get(gameId);
     gamePlayers = await Game.getPlayers(gameId);
-    currPlayerId = game.currPlayerId;
 
-    // we have a turn order and a current player
-
-    // console.log("game players before selecting next:", gamePlayers);
-    // console.log("attempting to find player with currPlayerId:", currPlayerId);
-
-    await _setNextPlayer();
+    // update current player
+    await _updateCurrentPlayer();
 
     // TODO: Added call to aiCallback() function
 
-    /** Selects a random first player; called as part of starting a new game
+    /**
+     * Internal function for Game.startTurn()
+     * Called as part of starting a new game to select play order
      * - Queries for all players in a game
      * - Randomly sorts those players and selects one
      * - Sets play order based on sorted order and sets player at index 0
      * to be the current player
      */
-    async function _setRandomFirstPlayer() : Promise<undefined> {
+    async function _setPlayOrder() : Promise<undefined> {
       let gamePlayerIds = gamePlayers.map(p => p.id);
       const sortedGamePlayerIds = fisherSort(gamePlayerIds) as string[];
 
@@ -406,35 +401,22 @@ class Game {
       sqlQuery += `END WHERE game_id = $1`;
       await db.query(sqlQuery, [gameId]);
       console.log("play order set in game_players");
-
-      // set curr_player to game_players player with play_order = 0
-      currPlayerId = sortedGamePlayerIds[0];
-      console.log("curr player ID set to:", currPlayerId);
-      const queryGIResult = await db.query(`
-          UPDATE games
-          SET curr_player_id = $2
-          WHERE id = $1
-          RETURNING games.id, games.curr_player_id as "currPlayerId"
-      `, [gameId, sortedGamePlayerIds[0]]);
-
-      console.log("game updated w/ curr player set:", queryGIResult.rows[0]);
       return;
     }
 
     /**
-     *
+     * Internal function for Game.startTurn()
+     * Updates the current player
+     * - If there is no current player (new game), sets it to play order 0
+     * - If it's the last player in player order, sets it to play order 0
      */
-    async function _setNextPlayer() : Promise<undefined> {
+    async function _updateCurrentPlayer() : Promise<undefined> {
       const currPlayer= gamePlayers.find(
         p => p.id === currPlayerId
       );
 
-      if (currPlayer === undefined) {
-        throw new Error("Unable to find current player.");
-      }
-
       // if this is a new game or current player is last player, next player is the turn 0 player
-      if (newGame || currPlayer.playOrder === gamePlayers.length - 1) {
+      if (currPlayer === undefined|| currPlayer.playOrder === gamePlayers.length - 1) {
 
         const turnZeroPlayer = gamePlayers.find(p => p.playOrder === 0);
         if (turnZeroPlayer === undefined) {
@@ -466,7 +448,7 @@ class Game {
 
       }
 
-      console.log("nextPlayer found:", nextPlayer);
+      console.log("new current player selected:", nextPlayer);
 
       const queryGIResult = await db.query(`
           UPDATE games
