@@ -100,17 +100,32 @@ export class Board {
   }
 
   /**
-   * Delete given board from database
-   **/
-  static async delete(boardId: string) {
-    const result: QueryResult<BoardInterface> = await db.query(`
-        DELETE
-        FROM boards
-        WHERE id = $1
-        RETURNING id`, [boardId]);
-    const board = result.rows[0];
+   * Resets (re-initializes) the board data for a given game
+   */
+  static async reset(boardId: string) : Promise<undefined> {
+    const result: QueryResult<BoardDimensionsInterface> = await db.query(`
+      SELECT
+        width,
+        height
+      FROM boards
+      WHERE id = $1
+    `,[boardId]);
 
-    if (!board) throw new Error(`No board: ${boardId}`);
+    const boardDimensions = {
+      height: result.rows[0].height,
+      width: result.rows[0].width
+    };
+
+    const boardData = Board.initializeBoardData(boardDimensions);
+
+    await db.query(`
+      UPDATE boards
+      SET
+        board = $2
+      WHERE id = $1
+      RETURNING *
+    `,[boardId, boardData]
+    );
   }
 
   /** Creates an initialized game board (full of cells in a final state)
@@ -224,6 +239,67 @@ export class Board {
 
         // console.log("Valid coord sets populated:", vcs)
         return vcs;
+      }
+    }
+  }
+
+  /**
+   * Generates a initialized game board as specified
+   * Accepts:
+   * - array of playerIds to simulate turns for (required)
+   * - if a winner should exist, that player's id (optional)
+   * - if the game should be a tie (true / false, optional)
+   * - how many turns should be taken (optional)
+   * Returns an BoardDataType with valid params
+   */
+  static generateBoardState(
+    boardDimensions: BoardDimensionsInterface,
+    playerIds: string[],
+    winnerId?: string,
+    tie?: boolean,
+    turns?: number
+  ): BoardDataType {
+    // TODO: Add support for arbitrary number of turns in random order
+    // TODO: Implement more realistic winning board state
+    let board = Game.createInitializedBoard(boardDimensions);
+    let currPlayerId = playerIds[0];
+
+    // see if we want to create a winning state
+    if (winnerId !== undefined) {
+      if (!playerIds.includes(winnerId)) {
+        throw new Error("Specified winner player ID is not part of provided list of player IDs.");
+      }
+      // create four in a row for the winning player ID
+      let counter = 0;
+      while (counter <= 3) {
+        board[boardDimensions.height - 1][counter].playerId = winnerId;
+        counter++;
+      }
+      return board;
+    }
+
+    // see if we want to create a tie
+    if (tie) {
+      if (playerIds.length < 2) {
+        throw new Error("In order to create a tie there must be 2 or more players.");
+      }
+
+      for (let y = 0; y < boardDimensions.height; y++) {
+        for (let x = 0; x < boardDimensions.width; x++) {
+          board[y][x].playerId = playerIds[0];
+          _cyclePlayers();
+        }
+      }
+      return board;
+    }
+    return board;
+
+    function _cyclePlayers() {
+      const currPlayerIndex = playerIds.indexOf(currPlayerId);
+      if (currPlayerIndex === playerIds.length - 1) {
+        currPlayerId = playerIds[0];
+      } else {
+        currPlayerId = playerIds[currPlayerIndex + 1];
       }
     }
   }

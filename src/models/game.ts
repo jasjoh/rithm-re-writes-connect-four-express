@@ -9,6 +9,13 @@ import { fisherSort } from "../utilities/utils";
 
 import db from "../db";
 import { PlayerInterface } from "./player";
+import {
+  Board,
+  BoardInterface,
+  BoardCellFinalStateInterface,
+  BoardDataType,
+  BoardDimensionsInterface
+} from "./board";
 import { QueryResult } from "pg";
 
 /** Game model
@@ -33,43 +40,25 @@ import { QueryResult } from "pg";
  * - update select statement to return as camelCase + update interfaces
  */
 
-// an initialized board cell has this interface
-interface BoardCellFinalStateInterface {
-  playerId: string | null;
-  validCoordSets: number[][][];
-}
-
-// a board cell can be null if uninitialized or in a final state if initialized
-type BoardCellStateType = BoardCellFinalStateInterface | null;
-
-// an initialized board full of finalized board cells
-type InitializedBoardType = BoardCellFinalStateInterface[][];
-
-interface BoardDimensionsInterface {
-  height: number;
-  width: number;
-}
-
 interface GameInterface {
   id: string;
-  width: number;
-  height: number;
   gameState: number;
   placedPieces: number[][] | null;
-  board: InitializedBoardType | null;
+  boardData: BoardDataType;
+  boardWidth: number;
+  boardHeight: number;
   winningSet: number[][] | null;
   currPlayerId: string | null;
   createdOn: Date;
   totalPlayers: number;
 }
 
-interface InitializedGameInterface extends GameInterface {
-  board: InitializedBoardType;
+interface StartedGameInterface extends GameInterface {
   currPlayerIid: string;
 }
 
 interface CheckGameEndInterface {
-  board: InitializedBoardType;
+  board: BoardDataType;
   placedPieces: number[][];
 }
 
@@ -80,7 +69,7 @@ interface GamePlayersInterface extends PlayerInterface {
 interface EndGameStateInterface {
   state: number,
   winningSet: number[][] | null,
-  winningPlayerId: string | null
+  winningPlayerId: string | null;
 }
 
 interface GameTurnInterface {
@@ -97,32 +86,27 @@ class Game {
    * Returns { ... game object ... }
    * */
   static async create(
-    newGame: BoardDimensionsInterface = { height: 7, width: 6 }
-  ) : Promise<GameInterface> {
+    boardDimensions: BoardDimensionsInterface = { height: 7, width: 6 }
+  ): Promise<GameInterface> {
 
     /** TODO:
      * - input validation
      * - error handling
      */
 
+    const board = await Board.create(boardDimensions);
+
     const result: QueryResult<GameInterface> = await db.query(`
-                INSERT INTO games (
-                                    height,
-                                    width
-                                  )
-                VALUES  (
-                          $1,
-                          $2
-                        )
-                RETURNING
-                    id,
-                    height,
-                    width,
-                    game_state AS "gameState",
-                    created_on AS "createdOn"`, [
-      newGame.height,
-      newGame.width
-    ],
+      INSERT INTO games ( board_id )
+      VALUES ( $1 )
+      RETURNING
+        games.id,
+        games.game_state AS "gameState",
+        games.created_on AS "createdOn",
+        boards.data AS "boardData",
+        boards.width as "boardWidth",
+        boards.height as "boardHeight"
+      JOIN boards ON games.id = boards.id`, [board.id]
     );
 
     const game = result.rows[0];
@@ -134,7 +118,7 @@ class Game {
    * Retrieves an array of all games with summary information
    * Returns [{ id, gameState, createdOn }, ...]   *
    * */
-  static async getAll() : Promise<GameInterface[]> {
+  static async getAll(): Promise<GameInterface[]> {
 
     const result: QueryResult<GameInterface> = await db.query(`
         SELECT
@@ -158,13 +142,13 @@ class Game {
    *
    * Throws NotFoundError if not found.
    **/
-  static async get(gameId: string) : Promise<GameInterface> {
+  static async get(gameId: string): Promise<GameInterface> {
     const result: QueryResult<GameInterface> = await db.query(`
         SELECT
-          id,
-          height,
-          width,
-          board,
+          games.id,
+          boards.data AS "boardData",
+          boards.width as "boardWidth",
+          boards.height as "boardHeight",
           game_state AS "gameState",
           placed_pieces AS "placedPieces",
           winning_set AS "winningSet",
@@ -173,8 +157,9 @@ class Game {
           COUNT(game_players.game_id)::int as "totalPlayers"
         FROM games
         LEFT OUTER JOIN game_players ON games.id = game_players.game_id
-        WHERE id = $1
-        GROUP BY games.id, games.height, games.width, games.board,
+        JOIN boards ON games.id = boards.id
+        WHERE games.id = $1
+        GROUP BY games.id, boardHeight, boardWidth, boardData,
                   games.game_state, games.placed_pieces, games.winning_set,
                   games.curr_player_id, games.created_on
     `, [gameId]);
@@ -206,12 +191,12 @@ class Game {
    * Throws error if game or player doesn't exist or player already added
    * Returns current player count if successful
    */
-  static async addPlayers(players: string[], gameId: string) : Promise<number> {
+  static async addPlayers(players: string[], gameId: string): Promise<number> {
 
     let sqlQueryValues: string = '';
 
     for (let i = 0; i < players.length; i++) {
-      i === players.length - 1 ? sqlQueryValues += `($1, $${i+2})` : sqlQueryValues += `($1, $${i+2}),`
+      i === players.length - 1 ? sqlQueryValues += `($1, $${i + 2})` : sqlQueryValues += `($1, $${i + 2}),`;
     }
 
     try {
@@ -250,7 +235,7 @@ class Game {
    * Throws NotFoundError if game or player not found.
    * Returns an updated count of players in the game if successful.
    **/
-  static async removePlayer(playerId: string, gameId: string) : Promise<number> {
+  static async removePlayer(playerId: string, gameId: string): Promise<number> {
     const queryGPIResult: QueryResult<GamePlayersInterface> = await db.query(`
         DELETE
         FROM game_players
@@ -274,7 +259,7 @@ class Game {
    * Throws error if game or player doesn't exist or player already added
    * Returns current player count if successful
    */
-  static async getPlayers(gameId: string) : Promise<GamePlayersInterface[]> {
+  static async getPlayers(gameId: string): Promise<GamePlayersInterface[]> {
     // console.log("Game.getPlayers() called with gameId:", gameId)
     const sqlQuery = `
       SELECT
@@ -291,57 +276,25 @@ class Game {
     return result.rows;
   }
 
-  /** Starts a game (conductor function)
+  /** Starts a new game (conductor function)
    * Initializes / resets game state and then starts the initial turn (unless
    * indicated otherwise.)
    * Throws error if there are insufficient players to start a game or game
    * doesn't exist
    * Returns undefined
   */
-  static async start(gameId: string, startTurn : boolean = true) : Promise<undefined> {
+  static async start(gameId: string, startTurn: boolean = true): Promise<undefined> {
 
-    // verify game exists
-    const queryGIResult: QueryResult<GameInterface> = await db.query(`
-        SELECT
-          id,
-          height,
-          width
-        FROM games
-        WHERE id = $1`, [gameId]);
-    const game = queryGIResult.rows[0];
-    if (!game) throw new NotFoundError(`No game with id: ${gameId}`);
+    const game = await Game.get(gameId);
 
-    // verify 2 players minimum
-    const queryCountResult: QueryResult<CountResultInterface> = await db.query(`
-        SELECT COUNT(*)
-        FROM game_players
-        WHERE game_id = $1`, [gameId]
-    );
-    if (queryCountResult.rows[0].count < 2) {
+    if (game.totalPlayers < 2) {
       throw new TooFewPlayers(`Game (${gameId}) has too few players to be started.`);
     }
 
-    // start the next turn
-    await Game.initializeGame(game);
+    // initialize a new game and start the first turn if directed to
+    await Board.reset(game.id);
     if (startTurn) await Game.startTurn(gameId);
     return undefined;
-  }
-
-  /** Creates the initial game board and updated game state */
-  static async initializeGame(game : GameInterface) : Promise<undefined> {
-    console.log("initializeGame called");
-
-    const board = Game.createInitializedBoard({height: game.height, width: game.width});
-    await db.query(`
-        UPDATE games
-        SET
-          board = $2,
-          game_state = 1,
-          placed_pieces = DEFAULT,
-          winning_set = DEFAULT,
-          curr_player_id = DEFAULT
-        WHERE id = $1`, [game.id, board]
-    );
   }
 
   /**
@@ -388,7 +341,7 @@ class Game {
      * - Sets play order based on sorted order and sets player at index 0
      * to be the current player
      */
-    async function _setPlayOrder() : Promise<undefined> {
+    async function _setPlayOrder(): Promise<undefined> {
       let gamePlayerIds = gamePlayers.map(p => p.id);
       const sortedGamePlayerIds = fisherSort(gamePlayerIds) as string[];
 
@@ -412,13 +365,13 @@ class Game {
      * - If there is no current player (new game), sets it to play order 0
      * - If it's the last player in player order, sets it to play order 0
      */
-    async function _updateCurrentPlayer() : Promise<undefined> {
-      const currPlayer= gamePlayers.find(
+    async function _updateCurrentPlayer(): Promise<undefined> {
+      const currPlayer = gamePlayers.find(
         p => p.id === currPlayerId
       );
 
       // if this is a new game or current player is last player, next player is the turn 0 player
-      if (currPlayer === undefined|| currPlayer.playOrder === gamePlayers.length - 1) {
+      if (currPlayer === undefined || currPlayer.playOrder === gamePlayers.length - 1) {
 
         const turnZeroPlayer = gamePlayers.find(p => p.playOrder === 0);
         if (turnZeroPlayer === undefined) {
@@ -469,15 +422,15 @@ class Game {
    * Game turns are an array of { id, playerId, gameId, location, createOnEpoch }
    * If not no game turns exist, returns null
    */
-  static async getTurns(gameId: string) : Promise<GameTurnInterface[]> {
+  static async getTurns(gameId: string): Promise<GameTurnInterface[]> {
     // console.log("getTurns() called");
     let sqlQuery =
-    `
+      `
       SELECT *
       FROM game_turns
       WHERE game_id = $1
-    `
-    const queryResult : QueryResult<GameTurnInterface> = await db.query(
+    `;
+    const queryResult: QueryResult<GameTurnInterface> = await db.query(
       sqlQuery,
       [gameId]
     );
@@ -507,27 +460,11 @@ class Game {
       gameId: ${gameId}, playerId: ${playerId}, col: ${col}`
     );
 
-    const queryGIResult: QueryResult<GameInterface> = await db.query(`
-      SELECT
-        board,
-        game_state as "gameState",
-        curr_player_id as "currPlayerId",
-        width,
-        height,
-        placed_pieces as "placedPieces"
-      FROM games
-      WHERE id = $1
-    `, [gameId]);
+    const game = await Game.get(gameId);
 
-    const gameResult = queryGIResult.rows[0];
+    const validGame = _validateGameState();
 
-    if (gameResult.board === null) {
-
-    }
-
-    const initGame = _validateGameState();
-
-    if (col < 0 || col > initGame.width - 1) {
+    if (col < 0 || col > validGame.boardWidth - 1) {
       throw new InvalidPiecePlacement('Specified column is out of bounds.');
     }
 
@@ -538,13 +475,13 @@ class Game {
       throw new InvalidPiecePlacement('Column is full.');
     }
 
-    const pieceLocation = [targetRow, col]
+    const pieceLocation = [targetRow, col];
 
     await _addToBoard();
 
     await _addTurnRecord();
 
-    const sqlQueryGIResult : QueryResult<CheckGameEndInterface> = await db.query(`
+    const sqlQueryGIResult: QueryResult<CheckGameEndInterface> = await db.query(`
         SELECT board, placed_pieces as "placedPieces"
         FROM games
         WHERE id = $1
@@ -565,25 +502,22 @@ class Game {
     }
 
     /** Validates games is in state where a piece can be dropped by the current player. */
-    function _validateGameState(): InitializedGameInterface {
-      if (gameResult === null) throw new NotFoundError(`No game with id: ${gameId}`);
-      if (gameResult.board === null) {
-        throw new InvalidGameState('Game board not initialized.');
-      }
-      if (gameResult.gameState !== 1) {
+    function _validateGameState(): StartedGameInterface {
+      if (game === null) throw new NotFoundError(`No game with id: ${gameId}`);
+      if (game.gameState !== 1) {
         throw new InvalidGameState('Game is not started or has finished.');
       }
-      if (gameResult.currPlayerId !== playerId) {
+      if (game.currPlayerId !== playerId) {
         throw new NotCurrentPlayer(`${playerId} is not the current player.`);
       }
-      return gameResult as InitializedGameInterface;
+      return game as StartedGameInterface;
     }
 
     /* Finds an empty row in a given column to place a piece. */
     function _findEmptyCellInColumn(): number | null {
       console.log(`_findEmptyCellInColumn(${col}) called.`);
       // check if the column is full and return 'null' if true
-      if (initGame.board[0][col].playerId !== null) {
+      if (validGame.board[0][col].playerId !== null) {
         console.log("this col was full");
         return null;
       }
@@ -593,8 +527,8 @@ class Game {
       // loop through rows top to bottom until we either:
       // -- find a non-null cell (and return the slot above)
       // -- reach the last cell and return it
-      while (row < initGame.height) {
-        if (initGame.board[row][col].playerId !== null) {
+      while (row < validGame.height) {
+        if (validGame.board[row][col].playerId !== null) {
           // console.log("found a piece at row, col", row, " ", col);
           // console.log("returning the row above:", row - 1);
           console.log(`returning ${row} - 1.`);
@@ -602,21 +536,21 @@ class Game {
         }
         row++;
       }
-      console.log(`returning initGame.height (${initGame.height}) - 1:`, initGame.height - 1);
-      return initGame.height - 1;
+      console.log(`returning validGame.height (${validGame.height}) - 1:`, validGame.height - 1);
+      return validGame.height - 1;
     }
 
     /** Adds a piece to a location in the board */
     async function _addToBoard(): Promise<number[]> {
       console.log(`_addToBoard(${pieceLocation[0]}, ${pieceLocation[1]}) called.`);
-      initGame.board[pieceLocation[0]][pieceLocation[1]].playerId = playerId;
-      if (initGame.placedPieces === null) {
-        initGame.placedPieces = [[pieceLocation[0], pieceLocation[1]]];
+      validGame.board[pieceLocation[0]][pieceLocation[1]].playerId = playerId;
+      if (validGame.placedPieces === null) {
+        validGame.placedPieces = [[pieceLocation[0], pieceLocation[1]]];
       } else {
-        initGame.placedPieces.push([pieceLocation[0], pieceLocation[1]]);
+        validGame.placedPieces.push([pieceLocation[0], pieceLocation[1]]);
       }
 
-      // console.log('updated board after addition:', initGame.board);
+      // console.log('updated board after addition:', validGame.board);
 
       await db.query(`
         UPDATE games
@@ -624,7 +558,7 @@ class Game {
           board = $2,
           placed_pieces = $3
         WHERE id = $1
-      `, [gameId, initGame.board, initGame.placedPieces]
+      `, [gameId, validGame.board, validGame.placedPieces]
       );
 
       return [pieceLocation[0], pieceLocation[1]];
@@ -642,7 +576,7 @@ class Game {
     async function _updateGameState() {
       if (endGameState.state === 2) {
         if (endGameState.winningPlayerId !== playerId) {
-          throw new Error("Game is won, but not by current player. Something went wrong.")
+          throw new Error("Game is won, but not by current player. Something went wrong.");
         }
         console.log("updating game state in DB since winner was found");
         const winningSet = endGameState.winningSet;
@@ -657,7 +591,7 @@ class Game {
       }
 
       // check for tie
-      if(endGameState.state === 3) {
+      if (endGameState.state === 3) {
         console.log("updating game state in DB since tie was found");
         await db.query(`
           UPDATE games
@@ -679,11 +613,11 @@ class Game {
 
     console.log("checkForGameEnd() called with gameState:", gameState);
 
-    let endGameState : EndGameStateInterface = {
+    let endGameState: EndGameStateInterface = {
       state: 1,
       winningSet: null,
       winningPlayerId: null
-    }
+    };
 
     for (let i = 0; i < gameState.placedPieces.length; i++) {
       const py = gameState.placedPieces[i][0];
@@ -693,16 +627,16 @@ class Game {
       for (let j = 0; j < gameState.board[py][px].validCoordSets.length; j++) {
         const validCoordSets = gameState.board[py][px].validCoordSets[j];
         const playerId = gameState.board[validCoordSets[j][0]][validCoordSets[j][1]].playerId;
-        if ( playerId !== null &&
+        if (playerId !== null &&
           validCoordSets.every(
             c => {
               return (
                 gameState.board[c[0]][c[1]].playerId !== null &&
-                gameState.board[c[0]][c[1]].playerId === playerId)
+                gameState.board[c[0]][c[1]].playerId === playerId);
             }
           )
         ) {
-          console.log("checkForGameEnd() determined game is won")
+          console.log("checkForGameEnd() determined game is won");
           endGameState.state = 2;
           endGameState.winningSet = gameState.board[py][px].validCoordSets[j];
           endGameState.winningPlayerId = playerId;
@@ -712,28 +646,28 @@ class Game {
     }
 
     // check for tie
-    if(gameState.board[0].every(cell => cell.playerId !== null)) {
-      console.log("checkForGameEnd() determined game is tied")
+    if (gameState.board[0].every(cell => cell.playerId !== null)) {
+      console.log("checkForGameEnd() determined game is tied");
       endGameState.state = 3;
       return endGameState;
     }
 
-    console.log("checkForGameEnd() determined game should continue")
+    console.log("checkForGameEnd() determined game should continue");
     return endGameState;
   }
 
   /** Creates an initialized game board (full of cells in a final state)
    * Accepts dimensions for the board as a BoardDimensionsInterface
-   * Returns the newly initialized boards as an InitializedBoardType
+   * Returns the newly initialized boards as an BoardDataType
    */
-  static createInitializedBoard(boardDimensions : BoardDimensionsInterface) : InitializedBoardType {
+  static createInitializedBoard(boardDimensions: BoardDimensionsInterface): BoardDataType {
 
     const newBoardState: BoardCellStateType[][] = [];
 
     _initializeMatrix();
     _populateBoardSpaces();
 
-    return newBoardState as InitializedBoardType;
+    return newBoardState as BoardDataType;
 
     /** Initializes the valid boundaries of the board */
     function _initializeMatrix() {
@@ -845,15 +779,15 @@ class Game {
  * - if a winner should exist, that player's id (optional)
  * - if the game should be a tie (true / false, optional)
  * - how many turns should be taken (optional)
- * Returns an InitializedBoardType with valid params
+ * Returns an BoardDataType with valid params
  */
 function generateBoardState(
-  boardDimensions : BoardDimensionsInterface,
-  playerIds : string[],
-  winnerId? : string,
-  tie? : boolean,
-  turns? : number
-) : InitializedBoardType {
+  boardDimensions: BoardDimensionsInterface,
+  playerIds: string[],
+  winnerId?: string,
+  tie?: boolean,
+  turns?: number
+): BoardDataType {
   // TODO: Add support for arbitrary number of turns in random order
   // TODO: Implement more realistic winning board state
   let board = Game.createInitializedBoard(boardDimensions);
@@ -876,7 +810,7 @@ function generateBoardState(
   // see if we want to create a tie
   if (tie) {
     if (playerIds.length < 2) {
-      throw new Error("In order to create a tie there must be 2 or more players.")
+      throw new Error("In order to create a tie there must be 2 or more players.");
     }
 
     for (let y = 0; y < boardDimensions.height; y++) {
@@ -889,14 +823,14 @@ function generateBoardState(
   }
   return board;
 
- function _cyclePlayers() {
-  const currPlayerIndex = playerIds.indexOf(currPlayerId);
-  if(currPlayerIndex === playerIds.length - 1) {
-    currPlayerId = playerIds[0];
-  } else {
-    currPlayerId = playerIds[currPlayerIndex + 1];
+  function _cyclePlayers() {
+    const currPlayerIndex = playerIds.indexOf(currPlayerId);
+    if (currPlayerIndex === playerIds.length - 1) {
+      currPlayerId = playerIds[0];
+    } else {
+      currPlayerId = playerIds[currPlayerIndex + 1];
+    }
   }
- }
 }
 
 export {
@@ -904,6 +838,6 @@ export {
   GameInterface,
   BoardDimensionsInterface,
   BoardCellFinalStateInterface,
-  InitializedBoardType,
+  BoardDataType,
   generateBoardState
 };

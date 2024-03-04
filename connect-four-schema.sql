@@ -8,14 +8,12 @@ CREATE TABLE players (
   created_on TIMESTAMPTZ DEFAULT current_timestamp
 );
 
--- As an alternative to matrices, we could create these dynamically as tables
 CREATE TABLE games (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  width INTEGER DEFAULT 7 NOT NULL,
-  height INTEGER DEFAULT 6 NOT NULL,
   game_state INTEGER DEFAULT 0 NOT NULL,
   placed_pieces INTEGER[][],
-  board JSONB[][],
+  board_id INTEGER NOT NULL
+    REFERENCES boards ON DELETE CASCADE,
   winning_set INTEGER[][],
   curr_player_id UUID
     REFERENCES players,
