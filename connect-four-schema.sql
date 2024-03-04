@@ -43,3 +43,20 @@ CREATE TABLE game_turns (
   location INTEGER[] NOT NULL,
   created_on_epoch BIGINT DEFAULT extract(epoch from current_timestamp)
 );
+
+CREATE TABLE board (
+  id SERIAL PRIMARY KEY,
+  data JSONB[][],
+  width INTEGER GENERATE ALWAYS AS (
+    CASE
+      WHEN data IS NULL THEN NULL
+      ELSE array_length(data, 2)
+    END
+  ) STORED,
+  height INTEGER GENERATE ALWAYS AS (
+    CASE
+      WHEN data IS NULL THEN NULL
+      ELSE array_length(data, 1)
+    END
+  ) STORED
+);

@@ -335,7 +335,7 @@ describe("drops piece", function () {
 
 describe("game turns retrieval", function () {
 
-  test("successfully return no turn when not have transpired", async function () {
+  test("successfully returns no turns when none have transpired", async function () {
 
     const games = await Game.getAll();
     let game = games[0];
