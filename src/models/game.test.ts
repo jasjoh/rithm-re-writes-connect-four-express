@@ -3,9 +3,7 @@ import { BadRequestError, NotFoundError } from "../expressError";
 import {
   Game,
   GameInterface,
-  BoardDimensionsInterface,
-  InitializedBoardType,
-  generateBoardState
+  BoardDimensionsInterface
 } from "./game";
 import {
   Player,
@@ -13,6 +11,7 @@ import {
   PlayerInterface
 } from "./player";
 import { createGameWithBoardState, createPlayers } from "./_factories";
+import { Board, BoardDataType } from "./board";
 import {
   TooFewPlayers, PlayerAlreadyExists,
   InvalidGameState, InvalidPiecePlacement, NotCurrentPlayer
@@ -23,12 +22,9 @@ import {
   commonBeforeAll,
   commonBeforeEach,
   commonAfterEach,
-  commonAfterAll,
-  testGameIds,
-  testPlayerIds
+  commonAfterAll
 } from "./_testCommon";
 import { randomUUID } from "crypto";
-import exp from "constants";
 
 beforeAll(commonBeforeAll);
 beforeEach(commonBeforeEach);
@@ -45,11 +41,13 @@ describe("create a new game", function () {
     // verify game was returned from creation
     const createdGame = await Game.create(boardDimensions);
 
+    console.log("result of creating a game:", createdGame);
+
     const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
     expect(uuidRegex.test(createdGame.id)).toBe(true);
-    expect(createdGame.height).toEqual(6);
-    expect(createdGame.width).toEqual(6);
+    expect(createdGame.boardHeight).toEqual(6);
+    expect(createdGame.boardWidth).toEqual(6);
     expect(createdGame.gameState).toEqual(0);
 
     // verify game exists in database
@@ -66,10 +64,11 @@ describe("get all games", function () {
 
   test("returns default games", async function () {
     const existingGames = await Game.getAll();
-    expect(existingGames.length).toEqual(2);
+    expect(existingGames.length).toEqual(1);
   });
 
   test("returns all games including newly created ones", async function () {
+    await Game.create(boardDimensions);
     await Game.create(boardDimensions);
     const existingGames = await Game.getAll();
     expect(existingGames.length).toEqual(3);
@@ -78,34 +77,10 @@ describe("get all games", function () {
 
 describe("get game details", function () {
 
-  test("returns default game", async function () {
-    const expectedGame: GameInterface = {
-      id: testGameIds[0],
-      width: expect.any(Number),
-      height: expect.any(Number),
-      gameState: 0,
-      placedPieces: null,
-      board: null,
-      winningSet: null,
-      currPlayerId: null,
-      createdOn: expect.any(Date),
-      totalPlayers: expect.any(Number)
-    };
-    const existingGame = await Game.get(testGameIds[0]);
-    expect(existingGame).toEqual(expectedGame);
-  });
-
-  test("returns initialized game", async function () {
-    const boardState = Game.createInitializedBoard(boardDimensions);
-    // console.log("board state created:", boardState);
-    const players = await createPlayers(1);
-    // console.log("players created:", players)
-    const gameFromFactory = await createGameWithBoardState(boardState, players[0].id);
-    // console.log("game created using createGameWithBoardState:", gameFromFactory)
-
-    const gameFromClassMethod = await Game.get(gameFromFactory.id);
-    // console.log("existingGame retrieved using ID from created game:", gameFromClassMethod)
-    expect(gameFromClassMethod).toEqual(expect.objectContaining(gameFromFactory));
+  test("returns created ame", async function () {
+    const createGame = await Game.create(boardDimensions);
+    const retrievedGame = await Game.get(createGame.id);
+    expect(createGame).toEqual(retrievedGame);
   });
 });
 
@@ -116,8 +91,7 @@ describe("delete game", function () {
     const gameToDeleteId = existingGames[0].id;
     Game.delete(gameToDeleteId);
     existingGames = await Game.getAll();
-    expect(existingGames[0].id).not.toEqual(gameToDeleteId);
-    expect(existingGames.length).toEqual(1);
+    expect(existingGames.length).toEqual(0);
   });
 
 });
@@ -128,26 +102,23 @@ describe("add player to game", function () {
 
     const players = await createPlayers(1);
     const existingGames = await Game.getAll();
-    expect(existingGames[0].totalPlayers).toEqual(0);
+    const existingPlayerCount = existingGames[0].totalPlayers;
 
+    // confirm addPlayers() returns expected count
     const playerCount = await Game.addPlayers([players[0].id], existingGames[0].id);
-    expect(playerCount).toEqual(1);
+    expect(playerCount).toEqual(existingPlayerCount + 1);
 
+    // confirm game reflects updated player count
     const gameWithPlayer = await Game.get(existingGames[0].id);
-    expect(gameWithPlayer.totalPlayers).toEqual(1);
+    expect(gameWithPlayer.totalPlayers).toEqual(existingPlayerCount + 1);
   });
 
   test("throws exception adding existing player", async function () {
 
     const players = await createPlayers(1);
     const existingGames = await Game.getAll();
-    expect(existingGames[0].totalPlayers).toEqual(0);
 
-    const playerCount = await Game.addPlayers([players[0].id], existingGames[0].id);
-    expect(playerCount).toEqual(1);
-
-    const gameWithPlayer = await Game.get(existingGames[0].id);
-    expect(gameWithPlayer.totalPlayers).toEqual(1);
+    await Game.addPlayers([players[0].id], existingGames[0].id);
 
     try {
       await Game.addPlayers([players[0].id], existingGames[0].id);
@@ -164,20 +135,19 @@ describe("remove player from game", function () {
 
     const players = await createPlayers(1);
     const existingGames = await Game.getAll();
-    expect(existingGames[0].totalPlayers).toEqual(0);
+    const existingPlayerCount = existingGames[0].totalPlayers;
 
     let playerCount = await Game.addPlayers([players[0].id], existingGames[0].id);
-    expect(playerCount).toEqual(1);
+    expect(playerCount).toEqual(existingPlayerCount + 1);
 
     playerCount = await Game.removePlayer(players[0].id, existingGames[0].id);
-    expect(playerCount).toEqual(0);
+    expect(playerCount).toEqual(existingPlayerCount);
 
   });
 
   test("throws exception removing non-existing player", async function () {
 
     const existingGames = await Game.getAll();
-    expect(existingGames[0].totalPlayers).toEqual(0);
 
     try {
       await Game.removePlayer(randomUUID(), existingGames[0].id);
@@ -194,13 +164,13 @@ describe("get list of players in game", function () {
 
     const players = await createPlayers(2);
     const existingGames = await Game.getAll();
-    expect(existingGames[0].totalPlayers).toEqual(0);
+    const existingPlayerCount = existingGames[0].totalPlayers;
 
     await Game.addPlayers([players[0].id], existingGames[0].id);
     await Game.addPlayers([players[1].id], existingGames[0].id);
 
     const addedPlayers = await Game.getPlayers(existingGames[0].id);
-    expect(addedPlayers.length).toEqual(2);
+    expect(addedPlayers.length).toEqual(existingPlayerCount + 2);
 
   });
 
@@ -221,6 +191,7 @@ describe("start a game", function () {
     await Game.start(gameToStart.id, false);
 
     const startedGame = await Game.get(gameToStart.id);
+
     expect(startedGame.gameState).toEqual(1);
   });
 
@@ -249,7 +220,7 @@ describe("start a game", function () {
     }
   });
 
-  test("does not start a turn when instructed not to", async function () {
+  test("does not call nextTurn() when instructed not to", async function () {
 
     const players = await createPlayers(2);
     const existingGames = await Game.getAll();
@@ -263,14 +234,9 @@ describe("start a game", function () {
 
     const startedGame = await Game.get(gameToStart.id);
     expect(startedGame.currPlayerId).toBeNull();
-
-    const gamePlayers = await Game.getPlayers(gameToStart.id);
-    for (let gp of gamePlayers) {
-      expect(gp.playOrder).toBeNull();
-    }
   });
 
-  test("starts a turn when NOT instructed not to", async function () {
+  test("calls nextTurn() by default", async function () {
 
     const players = await createPlayers(2);
     const existingGames = await Game.getAll();
@@ -284,11 +250,6 @@ describe("start a game", function () {
 
     const startedGame = await Game.get(gameToStart.id);
     expect(startedGame.currPlayerId).not.toBeNull();
-
-    const gamePlayers = await Game.getPlayers(gameToStart.id);
-    for (let gp of gamePlayers) {
-      expect(gp.playOrder).not.toBeNull();
-    }
   });
 
 });
@@ -301,9 +262,11 @@ describe("drops piece", function () {
     const players = await createPlayers(2);
     const games = await Game.getAll();
     let game = games[0];
+
     await Game.addPlayers([players[0].id], game.id);
     await Game.addPlayers([players[1].id], game.id);
     await Game.start(game.id);
+
     game = await Game.get(game.id);
     const currPlayerId = game.currPlayerId as string;
 
@@ -311,7 +274,7 @@ describe("drops piece", function () {
     game = await Game.get(game.id);
 
     // test game board
-    const gameBoard = game.board as InitializedBoardType;
+    const gameBoard = game.boardData as BoardDataType;
     const cellToTest = gameBoard[gameBoard.length - 1][0];
     expect(cellToTest.playerId).toBe(currPlayerId);
 
@@ -321,9 +284,18 @@ describe("drops piece", function () {
   });
 
   test("successfully detects a won game", async function () {
-    const boardState = generateBoardState(boardDimensions, testPlayerIds, testPlayerIds[0]);
+    const players = await createPlayers(2);
+    const playerArray = [
+      players[0].id,
+      players[1].id
+    ];
+    const boardState = Board.generateBoardState(
+      boardDimensions,
+      playerArray,
+      playerArray[0]
+    );
     console.log("won game test boardState:", boardState);
-    const game = await createGameWithBoardState(boardState, testPlayerIds[0]);
+    const game = await createGameWithBoardState(boardState, playerArray[0]);
     console.log("won game test game object:", game);
     // TODO: Finish this once we have a just-about-to-be-won game.
 
@@ -348,9 +320,11 @@ describe("game turns retrieval", function () {
     const players = await createPlayers(2);
     const games = await Game.getAll();
     let game = games[0];
+
     await Game.addPlayers([players[0].id], game.id);
     await Game.addPlayers([players[1].id], game.id);
     await Game.start(game.id);
+
     game = await Game.get(game.id);
     const currPlayerId = game.currPlayerId as string;
     await Game.dropPiece(game.id, currPlayerId, 0);

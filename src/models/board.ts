@@ -42,18 +42,24 @@ export class Board {
 
     const boardData = this.initializeBoardData(dimensions);
 
+    console.log("attempting to create new board");
+
     const result: QueryResult<BoardInterface> = await db.query(`
                 INSERT INTO boards (
-                  data
+                  data,
+                  height,
+                  width
                 )
                 VALUES (
-                  $1
+                  $1,
+                  $2,
+                  $3
                 )
                 RETURNING
                   id,
                   data,
                   height,
-                  width`, [boardData],
+                  width`, [boardData, dimensions.height, dimensions.width],
     );
 
     const board = result.rows[0];
@@ -87,13 +93,17 @@ export class Board {
    * Updates (and overwrites) the board data with the provided data (BoardDataType)
    */
   static async update(boardId: string, boardData: BoardDataType) : Promise<BoardInterface> {
+    console.log("Board.update() called.");
+
     const result: QueryResult<BoardInterface> = await db.query(`
       UPDATE boards
       SET
-        board = $2
+        data = $2,
+        height = $3,
+        width = $4
       WHERE id = $1
       RETURNING *
-    `,[boardId, boardData]
+    `,[boardId, boardData, boardData.length, boardData[0].length]
     );
     const board = result.rows[0];
     return board;
@@ -103,6 +113,8 @@ export class Board {
    * Resets (re-initializes) the board data for a given game
    */
   static async reset(boardId: string) : Promise<undefined> {
+    console.log("Board.reset() called.");
+
     const result: QueryResult<BoardDimensionsInterface> = await db.query(`
       SELECT
         width,
@@ -121,10 +133,12 @@ export class Board {
     await db.query(`
       UPDATE boards
       SET
-        board = $2
+        data = $2,
+        height = $3,
+        width = $4
       WHERE id = $1
       RETURNING *
-    `,[boardId, boardData]
+    `,[boardId, boardData, boardDimensions.height, boardDimensions.width]
     );
   }
 
@@ -244,7 +258,8 @@ export class Board {
   }
 
   /**
-   * Generates a initialized game board as specified
+   * Initializes a new board and populates board with data to meet
+   * specified end game conditions.
    * Accepts:
    * - array of playerIds to simulate turns for (required)
    * - if a winner should exist, that player's id (optional)
@@ -261,7 +276,7 @@ export class Board {
   ): BoardDataType {
     // TODO: Add support for arbitrary number of turns in random order
     // TODO: Implement more realistic winning board state
-    let board = Game.createInitializedBoard(boardDimensions);
+    let board = Board.initializeBoardData(boardDimensions);
     let currPlayerId = playerIds[0];
 
     // see if we want to create a winning state
@@ -292,6 +307,8 @@ export class Board {
       }
       return board;
     }
+
+    // fail safe if no desired end-game state is specified
     return board;
 
     function _cyclePlayers() {

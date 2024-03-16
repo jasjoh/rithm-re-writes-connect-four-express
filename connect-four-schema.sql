@@ -1,5 +1,14 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- CREATE FUNCTION update_board_dimensions()
+-- RETURNS TRIGGER AS $$
+-- BEGIN
+--   NEW.width := array_length(NEW.data, 2);
+--   NEW.height := array_length(NEW.data, 1);
+--   RETURN NEW;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
 CREATE TABLE players (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   ai BOOLEAN DEFAULT FALSE NOT NULL,
@@ -7,6 +16,17 @@ CREATE TABLE players (
   color TEXT NOT NULL,
   created_on TIMESTAMPTZ DEFAULT current_timestamp
 );
+
+CREATE TABLE boards (
+  id SERIAL PRIMARY KEY,
+  width INTEGER,
+  height INTEGER,
+  data JSONB[][]
+);
+
+-- CREATE TRIGGER update_board_dimensions_trigger
+-- BEFORE INSERT OR UPDATE ON boards
+-- FOR EACH ROW EXECUTE FUNCTION update_board_dimensions();
 
 CREATE TABLE games (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -40,21 +60,4 @@ CREATE TABLE game_turns (
     REFERENCES games ON DELETE CASCADE,
   location INTEGER[] NOT NULL,
   created_on_epoch BIGINT DEFAULT extract(epoch from current_timestamp)
-);
-
-CREATE TABLE board (
-  id SERIAL PRIMARY KEY,
-  data JSONB[][],
-  width INTEGER GENERATE ALWAYS AS (
-    CASE
-      WHEN data IS NULL THEN NULL
-      ELSE array_length(data, 2)
-    END
-  ) STORED,
-  height INTEGER GENERATE ALWAYS AS (
-    CASE
-      WHEN data IS NULL THEN NULL
-      ELSE array_length(data, 1)
-    END
-  ) STORED
 );
