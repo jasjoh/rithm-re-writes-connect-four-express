@@ -307,9 +307,6 @@ describe("drops piece", function () {
       players[1].id
     ];
     let game = await createNearlyTiedGame(boardDimensions, playerIds[0]);
-    let gamePieces = game.boardData.map(r => r.map(c => c.playerId));
-    console.log("nearly tied game:", game);
-    console.log("game pieces:", gamePieces);
     expect(game.gameState).toBe(1);
 
     game = await Game.dropPiece(game.id, playerIds[0], 0);
