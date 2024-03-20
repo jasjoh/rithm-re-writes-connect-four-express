@@ -10,7 +10,7 @@ import {
   NewPlayerInterface,
   PlayerInterface
 } from "./player";
-import { createGameWithBoardState, createPlayers } from "./_factories";
+import { createNearlyWonGame, createPlayers } from "./_factories";
 import { Board, BoardDataType } from "./board";
 import {
   TooFewPlayers, PlayerAlreadyExists,
@@ -105,7 +105,7 @@ describe("add player to game", function () {
     const existingPlayerCount = existingGames[0].totalPlayers;
 
     // confirm addPlayers() returns expected count
-    const playerCount = await Game.addPlayers([players[0].id], existingGames[0].id);
+    const playerCount = await Game.addPlayers(existingGames[0].id, [players[0].id]);
     expect(playerCount).toEqual(existingPlayerCount + 1);
 
     // confirm game reflects updated player count
@@ -118,10 +118,10 @@ describe("add player to game", function () {
     const players = await createPlayers(1);
     const existingGames = await Game.getAll();
 
-    await Game.addPlayers([players[0].id], existingGames[0].id);
+    await Game.addPlayers(existingGames[0].id, [players[0].id]);
 
     try {
-      await Game.addPlayers([players[0].id], existingGames[0].id);
+      await Game.addPlayers(existingGames[0].id, [players[0].id]);
     } catch (error: any) {
       expect(error).toBeInstanceOf(PlayerAlreadyExists);
     }
@@ -137,10 +137,10 @@ describe("remove player from game", function () {
     const existingGames = await Game.getAll();
     const existingPlayerCount = existingGames[0].totalPlayers;
 
-    let playerCount = await Game.addPlayers([players[0].id], existingGames[0].id);
+    let playerCount = await Game.addPlayers(existingGames[0].id, [players[0].id]);
     expect(playerCount).toEqual(existingPlayerCount + 1);
 
-    playerCount = await Game.removePlayer(players[0].id, existingGames[0].id);
+    playerCount = await Game.removePlayer(existingGames[0].id, players[0].id);
     expect(playerCount).toEqual(existingPlayerCount);
 
   });
@@ -166,8 +166,8 @@ describe("get list of players in game", function () {
     const existingGames = await Game.getAll();
     const existingPlayerCount = existingGames[0].totalPlayers;
 
-    await Game.addPlayers([players[0].id], existingGames[0].id);
-    await Game.addPlayers([players[1].id], existingGames[0].id);
+    await Game.addPlayers(existingGames[0].id, [players[0].id]);
+    await Game.addPlayers(existingGames[0].id, [players[1].id]);
 
     const addedPlayers = await Game.getPlayers(existingGames[0].id);
     expect(addedPlayers.length).toEqual(existingPlayerCount + 2);
@@ -186,8 +186,9 @@ describe("start a game", function () {
 
     expect(gameToStart.gameState).toEqual(0);
 
-    await Game.addPlayers([players[0].id], gameToStart.id);
-    await Game.addPlayers([players[1].id], gameToStart.id);
+    await Game.addPlayers(existingGames[0].id, [players[0].id]);
+    await Game.addPlayers(existingGames[0].id, [players[1].id]);
+
     await Game.start(gameToStart.id, false);
 
     const startedGame = await Game.get(gameToStart.id);
@@ -211,7 +212,7 @@ describe("start a game", function () {
 
     expect(gameToStart.gameState).toEqual(0);
 
-    await Game.addPlayers([players[0].id], gameToStart.id);
+    await Game.addPlayers(gameToStart.id, [players[0].id]);
 
     try {
       await Game.start(gameToStart.id, false);
@@ -228,8 +229,8 @@ describe("start a game", function () {
 
     expect(gameToStart.gameState).toEqual(0);
 
-    await Game.addPlayers([players[0].id], gameToStart.id);
-    await Game.addPlayers([players[1].id], gameToStart.id);
+    await Game.addPlayers(gameToStart.id, [players[0].id]);
+    await Game.addPlayers(gameToStart.id, [players[1].id]);
     await Game.start(gameToStart.id, false);
 
     const startedGame = await Game.get(gameToStart.id);
@@ -244,8 +245,9 @@ describe("start a game", function () {
 
     expect(gameToStart.gameState).toEqual(0);
 
-    await Game.addPlayers([players[0].id], gameToStart.id);
-    await Game.addPlayers([players[1].id], gameToStart.id);
+    await Game.addPlayers(gameToStart.id, [players[0].id]);
+    await Game.addPlayers(gameToStart.id, [players[1].id]);
+
     await Game.start(gameToStart.id);
 
     const startedGame = await Game.get(gameToStart.id);
@@ -263,8 +265,8 @@ describe("drops piece", function () {
     const games = await Game.getAll();
     let game = games[0];
 
-    await Game.addPlayers([players[0].id], game.id);
-    await Game.addPlayers([players[1].id], game.id);
+    await Game.addPlayers(game.id, [players[0].id]);
+    await Game.addPlayers(game.id, [players[1].id]);
     await Game.start(game.id);
 
     game = await Game.get(game.id);
@@ -285,23 +287,17 @@ describe("drops piece", function () {
 
   test("successfully detects a won game", async function () {
     const players = await createPlayers(2);
-    const playerArray = [
+    const playerIds = [
       players[0].id,
       players[1].id
     ];
-    const boardState = Board.generateBoardState(
-      boardDimensions,
-      playerArray,
-      playerArray[0]
-    );
-    console.log("won game test boardState:", boardState);
-    const game = await createGameWithBoardState(boardState, playerArray[0]);
-    console.log("won game test game object:", game);
-    // TODO: Finish this once we have a just-about-to-be-won game.
+    let game = await createNearlyWonGame(boardDimensions, playerIds, playerIds[0]);
+    console.log("nearly won game:", game);
+
+    game = await Game.dropPiece(game.id, playerIds[0], 0);
+    console.log("game after dropping a game winning piece:", game);
 
   });
-
-
 
 });
 
@@ -321,8 +317,9 @@ describe("game turns retrieval", function () {
     const games = await Game.getAll();
     let game = games[0];
 
-    await Game.addPlayers([players[0].id], game.id);
-    await Game.addPlayers([players[1].id], game.id);
+    await Game.addPlayers(game.id, [players[0].id]);
+    await Game.addPlayers(game.id, [players[1].id]);
+
     await Game.start(game.id);
 
     game = await Game.get(game.id);

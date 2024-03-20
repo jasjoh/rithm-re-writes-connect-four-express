@@ -17,7 +17,7 @@ import {
   BoardDimensionsInterface
 } from "./board";
 import { QueryResult } from "pg";
-import { platform } from "os";
+import _ from "lodash";
 
 /** Game model
  * Supports CRUD operations + Game Turn Logic
@@ -42,15 +42,11 @@ import { platform } from "os";
  */
 
 interface GameUpdateInterface {
-  id: string;
-  boardId: string,
-  boardData: BoardDataType;
-  fields : {
-    gameState: number | undefined;
-    placedPieces: number[][] | null | undefined;
-    winningSet: number[][] | null | undefined;
-    currPlayerId: string | null | undefined;
-  }
+  boardId?: string
+  gameState?: number;
+  placedPieces?: number[][] | null;
+  winningSet?: number[][] | null;
+  currPlayerId?: string | null;
 }
 
 interface GameInterface {
@@ -221,46 +217,35 @@ class Game {
    * Updates a game to a given state represented by a GameUpdateInterface
    * Returns the updated GameInterface
    */
-  // static async update(
-  //   gameId: string,
-  //   gameUpdate : GameUpdateInterface
-  // ) : Promise<GameInterface> {
+  static async update(
+    gameId: string,
+    gameUpdate : GameUpdateInterface
+  ) : Promise<GameInterface> {
 
+    console.log("Game.update() called.");
+    const keys = Object.keys(gameUpdate);
 
-  //   let sqlSet : string = ``;
-  //   const sqlParams : (string|number|number[][]|null)[]= [];
-  //   let tokenNum : number = 1;
+    // for every key (e.g. placedPieces)
+    // add 'key = $num' to an array
+    // join these elements of the clause together into a string with ', '
+    // start at 2 (0 + 2) so we reserve $1 for the game ID
+    // TODO: Convert camelCase to snake_case
 
-  //   // TODO: convert this into a for loop
-  //   if (gameUpdate.fields.gameState !== undefined) {
-  //     sqlParams.push(gameUpdate.fields.gameState);
-  //     sqlSet += `game_state = $${tokenNum},`;
-  //     tokenNum++;
-  //   }
-  //   if (gameUpdate.fields.placedPieces !== undefined) {
-  //     sqlParams.push(gameUpdate.fields.placedPieces);
-  //     sqlSet += `placed_pieces = $${tokenNum},`;
-  //     tokenNum++;
-  //   }
-  //   if (gameUpdate.fields.winningSet !== undefined) {
-  //     sqlParams.push(gameUpdate.fields.winningSet);
-  //     sqlSet += `winning_set = $${tokenNum},`;
-  //     tokenNum++;
-  //   }
-  //   if (gameUpdate.fields.currPlayerId !== undefined) {
-  //     sqlParams.push(gameUpdate.fields.currPlayerId);
-  //     sqlSet += `curr_player_id = $${tokenNum},`;
-  //     tokenNum++;
-  //   }
+    const setClause = keys.map((key, index) => `${_.snakeCase(key)} = $${index + 2}`).join(', ');
+    const sqlQuery = `UPDATE games SET ${setClause} WHERE id = $1`;
+    console.log("update sql query established:", sqlQuery);
 
-  //   let sqlQuery = `
-  //     UPDATE games
-  //     SET ${sqlSet}
+    const values = keys.map(key => gameUpdate[key as keyof GameUpdateInterface]);
+    values.unshift(gameId);
+    console.log("values for token replacement established:", values);
 
-  //   `
+    await db.query(sqlQuery, values);
+    const game = await Game.get(gameId);
 
-  //   const result : QueryResult<GameInterface> = await db.query(sqlQuery, []);
-  // }
+    console.log("Update game:", game);
+
+    return game;
+  }
 
   /**
    * Delete given game from database; returns undefined.   *
@@ -281,7 +266,7 @@ class Game {
    * Throws error if game or player doesn't exist or player already added
    * Returns updated current player count if successful
    */
-  static async addPlayers(players: string[], gameId: string): Promise<number> {
+  static async addPlayers(gameId: string, players: string[]): Promise<number> {
 
     console.log("Game.addPlayers() called w/ players:", players);
 
@@ -328,7 +313,7 @@ class Game {
    * Throws NotFoundError if game or player not found.
    * Returns an updated count of players in the game if successful.
    **/
-  static async removePlayer(playerId: string, gameId: string): Promise<number> {
+  static async removePlayer(gameId: string, playerId: string): Promise<number> {
     const queryGPIResult: QueryResult<GamePlayersInterface> = await db.query(`
         DELETE
         FROM game_players
@@ -548,7 +533,7 @@ class Game {
    * If game is not over, starts next turn (to switch to next player)
    * Returns true if the drop was successful, otherwise false   *
    */
-  static async dropPiece(gameId: string, playerId: string, col: number) {
+  static async dropPiece(gameId: string, playerId: string, col: number) : Promise<GameInterface> {
     /**
      * Core Logic:
      * - determine validity of drop
@@ -588,7 +573,7 @@ class Game {
 
     Game.checkForGameEnd(game);
 
-    console.log("checkForGameEnd() called and update game is:", game);
+    console.log("checkForGameEnd() called and updated game is:", game);
 
     await _updateGameState(); // TODO: explicitly pass data
 
@@ -597,6 +582,8 @@ class Game {
       // start the next turn
       await Game.nextTurn(gameId);
     }
+
+    return game;
 
     /** Validates games is in state where a piece can be dropped by the current player. */
     function _validateGameState(): StartedGameInterface {
@@ -681,8 +668,8 @@ class Game {
         await db.query(`
           UPDATE games
           SET
-            winning_set = $2
-            gameState = 2
+            winning_set = $2,
+            game_state = 2
           WHERE id = $1
         `, [gameId, winningSet]);
         return;
@@ -694,7 +681,7 @@ class Game {
         await db.query(`
           UPDATE games
           SET
-            gameState = 3
+            game_state = 3
           WHERE id = $1
         `, [gameId]);
         return;

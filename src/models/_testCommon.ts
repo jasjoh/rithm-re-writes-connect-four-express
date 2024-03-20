@@ -52,7 +52,7 @@ async function commonBeforeAll() {
   const game = await Game.create();
 
   for (let player of players) {
-    Game.addPlayers([player.id], game.id)
+    Game.addPlayers(game.id, [player.id])
   }
 }
 

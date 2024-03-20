@@ -7,12 +7,12 @@ import {
   GameInterface,
   GameUpdateInterface,
   BoardDimensionsInterface
- } from "./game";
- import { BoardDataType } from "./game";
+} from "./game";
+import { BoardDataType } from "./game";
 
- import { generateRandomHexColor, generateRandomName } from "../utilities/utils";
+import { generateRandomHexColor, generateRandomName } from "../utilities/utils";
 
- import { PlayerInterface, NewPlayerInterface, Player } from "./player";
+import { PlayerInterface, NewPlayerInterface, Player } from "./player";
 import { Board } from "./board";
 
 /**
@@ -20,13 +20,13 @@ import { Board } from "./board";
  * Accepts an initial state as a matrix representing desired game state
  * Returns the newly created Game instance
  */
-async function createGameWithBoardState(
+async function createGameWithBoardData(
     boardData: BoardDataType,
     currPlayerId: string
   ): Promise<GameInterface> {
 
-  console.log("createGameWithBoardState factory function called");
-  _validBoardData();
+  console.log("createGameWithBoardData factory function called");
+  _validateBoardData();
 
   const boardDimensions = {
     height: boardData.length,
@@ -58,7 +58,7 @@ async function createGameWithBoardState(
 
   return game;
 
-  function _validBoardData() {
+  function _validateBoardData() {
     for (let row of boardData) {
       const allNotUndefined = row.every(c => c.playerId !== undefined );
       if (!allNotUndefined) {
@@ -66,6 +66,50 @@ async function createGameWithBoardState(
       }
     }
   }
+
+}
+
+/**
+ * Factory function for creating a new game which is one play away from being won
+ * Accepts a player ID to use as the about-to-win player
+ * The created game will be won if the provided player ID drops a piece in column 0
+ * Also populates: Game.placedPieces
+ * Returns the newly created Game instance
+ */
+async function createNearlyWonGame(
+  boardDimensions: BoardDimensionsInterface,
+  playerIds: string[],
+  winningPlayerId: string
+): Promise<GameInterface> {
+
+console.log("createNearlyWonGame factory function called");
+
+let game = await Game.create(boardDimensions);
+await Game.addPlayers(game.id, playerIds);
+await Game.start(game.id, false);
+const boardId = game.boardId;
+await Board.setBoardDataNearlyWon(boardId, winningPlayerId);
+const board = await Board.get(boardId);
+
+// populate placedPieces based on boardData
+const placedPieces : number[][] = [];
+for (let y = 0; y < board.height; y++) {
+  for (let x = 0; x < board.width; x++) {
+    if (board.data[y][x].playerId !== null) {
+      placedPieces.push([y, x]);
+    }
+  }
+}
+
+// TODO: fix other issues? add players, set current player, etc.?
+const gameUpdate : GameUpdateInterface = {
+  placedPieces: placedPieces,
+  currPlayerId: winningPlayerId
+};
+
+game = await Game.update(game.id, gameUpdate);
+
+return game;
 
 }
 
@@ -92,6 +136,7 @@ async function createPlayers(count : number = 1) : Promise<PlayerInterface[]> {
 }
 
 export {
-  createGameWithBoardState,
-  createPlayers
+  createGameWithBoardData,
+  createPlayers,
+  createNearlyWonGame
 }

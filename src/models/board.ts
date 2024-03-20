@@ -1,5 +1,6 @@
 import { SQLQueries } from "../utilities/sqlQueries";
 import { CountResultInterface } from "../utilities/commonInterfaces";
+import { v4 as uuidv4 } from "uuid";
 
 import db from "../db";
 import { PlayerInterface } from "./player";
@@ -267,58 +268,97 @@ export class Board {
    * - how many turns should be taken (optional)
    * Returns an BoardDataType with valid params
    */
-  static generateBoardState(
-    boardDimensions: BoardDimensionsInterface,
-    playerIds: string[],
-    winnerId?: string,
-    tie?: boolean,
-    turns?: number
-  ): BoardDataType {
-    // TODO: Add support for arbitrary number of turns in random order
-    // TODO: Implement more realistic winning board state
-    let board = Board.initializeBoardData(boardDimensions);
-    let currPlayerId = playerIds[0];
+  // static generateBoardState(
+  //   boardDimensions: BoardDimensionsInterface,
+  //   playerIds: string[],
+  //   winnerId?: string,
+  //   tie?: boolean,
+  //   turns?: number
+  // ): BoardDataType {
+  //   // TODO: Add support for arbitrary number of turns in random order
+  //   // TODO: Implement more realistic winning board state
+  //   let board = Board.initializeBoardData(boardDimensions);
+  //   let currPlayerId = playerIds[0];
 
-    // see if we want to create a winning state
-    if (winnerId !== undefined) {
-      if (!playerIds.includes(winnerId)) {
-        throw new Error("Specified winner player ID is not part of provided list of player IDs.");
+  //   // see if we want to create a winning state
+  //   if (winnerId !== undefined) {
+  //     if (!playerIds.includes(winnerId)) {
+  //       throw new Error("Specified winner player ID is not part of provided list of player IDs.");
+  //     }
+  //     // create four in a row for the winning player ID
+  //     let counter = 0;
+  //     while (counter <= 3) {
+  //       board[boardDimensions.height - 1][counter].playerId = winnerId;
+  //       counter++;
+  //     }
+  //     return board;
+  //   }
+
+  //   // see if we want to create a tie
+  //   if (tie) {
+  //     if (playerIds.length < 2) {
+  //       throw new Error("In order to create a tie there must be 2 or more players.");
+  //     }
+
+  //     for (let y = 0; y < boardDimensions.height; y++) {
+  //       for (let x = 0; x < boardDimensions.width; x++) {
+  //         board[y][x].playerId = playerIds[0];
+  //         _cyclePlayers();
+  //       }
+  //     }
+  //     return board;
+  //   }
+
+  //   // fail safe if no desired end-game state is specified
+  //   return board;
+
+  //   function _cyclePlayers() {
+  //     const currPlayerIndex = playerIds.indexOf(currPlayerId);
+  //     if (currPlayerIndex === playerIds.length - 1) {
+  //       currPlayerId = playerIds[0];
+  //     } else {
+  //       currPlayerId = playerIds[currPlayerIndex + 1];
+  //     }
+  //   }
+  // }
+
+  /**
+ * Updates the provided BoardDataType to have pieces played by the provided
+ * player ID at the bottom row in columns 1, 2, and 3 so that a piece can be
+ * placed in column 0 and trigger a win. Should only be provided a fresh board.
+ */
+  static async setBoardDataNearlyWon(
+    boardId : string,
+    winningPlayerId : string
+  ) : Promise<undefined> {
+
+    const board = await Board.get(boardId);
+    const boardData = board.data;
+    boardData[boardData.length - 1][1].playerId = winningPlayerId;
+    boardData[boardData.length - 1][2].playerId = winningPlayerId;
+    boardData[boardData.length - 1][3].playerId = winningPlayerId;
+    await Board.update(boardId, boardData);
+  }
+
+  /**
+   * Updates the provided BoardDataType to have only one empty slot available
+   * to drop a piece at the top of column 0. Uses a random GUID to represent
+   * player IDs associated with every other played piece to avoid a potential
+   * win.
+   */
+  static async setBoardDataNearlyTied(boardId : string) : Promise<undefined> {
+    const playerId = uuidv4();
+    const board = await Board.get(boardId);
+    const boardData = board.data;
+
+    for (let row of boardData) {
+      for (let col of row) {
+        col.playerId = playerId;
       }
-      // create four in a row for the winning player ID
-      let counter = 0;
-      while (counter <= 3) {
-        board[boardDimensions.height - 1][counter].playerId = winnerId;
-        counter++;
-      }
-      return board;
     }
 
-    // see if we want to create a tie
-    if (tie) {
-      if (playerIds.length < 2) {
-        throw new Error("In order to create a tie there must be 2 or more players.");
-      }
-
-      for (let y = 0; y < boardDimensions.height; y++) {
-        for (let x = 0; x < boardDimensions.width; x++) {
-          board[y][x].playerId = playerIds[0];
-          _cyclePlayers();
-        }
-      }
-      return board;
-    }
-
-    // fail safe if no desired end-game state is specified
-    return board;
-
-    function _cyclePlayers() {
-      const currPlayerIndex = playerIds.indexOf(currPlayerId);
-      if (currPlayerIndex === playerIds.length - 1) {
-        currPlayerId = playerIds[0];
-      } else {
-        currPlayerId = playerIds[currPlayerIndex + 1];
-      }
-    }
+    boardData[0][0].playerId = null;
+    await Board.update(boardId, boardData);
   }
 }
 
