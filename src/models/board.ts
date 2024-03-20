@@ -346,19 +346,41 @@ export class Board {
    * player IDs associated with every other played piece to avoid a potential
    * win.
    */
-  static async setBoardDataNearlyTied(boardId : string) : Promise<undefined> {
-    const playerId = uuidv4();
+  static async setBoardDataNearlyTied(
+    boardId : string,
+    playerIds: string[]
+  ) : Promise<undefined> {
     const board = await Board.get(boardId);
     const boardData = board.data;
 
-    for (let row of boardData) {
-      for (let col of row) {
-        col.playerId = playerId;
+    let playerIndex : number;
+    let counter = 0;
+    for (let y = 0; y < boardData.length; y++) {
+      playerIndex = 0;
+      if (counter > 1) {
+        playerIndex = 1;
+        if (counter > 3) {
+          playerIndex = 0;
+          counter = 0;
+        }
       }
+      for (let col of boardData[y]) {
+        playerIndex = playerIndex === 0 ? 1 : 0;
+        col.playerId = playerIds[playerIndex];
+      }
+      counter++;
     }
 
     boardData[0][0].playerId = null;
     await Board.update(boardId, boardData);
+  }
+
+  /** Retrieves the matrix of playerIds representing played pieces for a given
+   *  board ID in the format (playerId | null)[][] */
+  static async getGamePieces(boardId: string) : Promise<(string | null)[][]> {
+    const board = await Board.get(boardId);
+    const boardPieces = board.data.map(r => r.map(c => c.playerId));
+    return boardPieces;
   }
 }
 

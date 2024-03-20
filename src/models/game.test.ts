@@ -10,7 +10,7 @@ import {
   NewPlayerInterface,
   PlayerInterface
 } from "./player";
-import { createNearlyWonGame, createPlayers } from "./_factories";
+import { createNearlyWonGame, createNearlyTiedGame, createPlayers } from "./_factories";
 import { Board, BoardDataType } from "./board";
 import {
   TooFewPlayers, PlayerAlreadyExists,
@@ -292,11 +292,29 @@ describe("drops piece", function () {
       players[1].id
     ];
     let game = await createNearlyWonGame(boardDimensions, playerIds, playerIds[0]);
-    console.log("nearly won game:", game);
+    // console.log("nearly won game:", game);
+    expect(game.gameState).toBe(1);
 
     game = await Game.dropPiece(game.id, playerIds[0], 0);
-    console.log("game after dropping a game winning piece:", game);
+    //console.log("game after dropping a game winning piece:", game);
+    expect(game.gameState).toBe(2);
+  });
 
+  test("successfully detects a tied game", async function () {
+    const players = await createPlayers(2);
+    const playerIds = [
+      players[0].id,
+      players[1].id
+    ];
+    let game = await createNearlyTiedGame(boardDimensions, playerIds[0]);
+    let gamePieces = game.boardData.map(r => r.map(c => c.playerId));
+    console.log("nearly tied game:", game);
+    console.log("game pieces:", gamePieces);
+    expect(game.gameState).toBe(1);
+
+    game = await Game.dropPiece(game.id, playerIds[0], 0);
+    //console.log("game after dropping a game winning piece:", game);
+    expect(game.gameState).toBe(3);
   });
 
 });
