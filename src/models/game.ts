@@ -513,19 +513,8 @@ class Game {
    */
   static async getTurns(gameId: string): Promise<GameTurnInterface[]> {
     // console.log("getTurns() called");
-    let sqlQuery =
-      `
-      SELECT *
-      FROM game_turns
-      WHERE game_id = $1
-    `;
-    const queryResult: QueryResult<GameTurnInterface> = await db.query(
-      sqlQuery,
-      [gameId]
-    );
-    const gameTurns = queryResult.rows;
-    // console.log("getTurns() query results:", gameTurns);
-    return gameTurns;
+    const turns = await Turn.getTurns(gameId);
+    return turns;
   }
 
   /**
@@ -550,34 +539,29 @@ class Game {
     );
 
     let game = await Game.get(gameId);
-
-    const validGame = _validateGameState(); // TODO: explicitly pass data
+    const validGame = _validateGameState(game);
 
     if (col < 0 || col > validGame.boardWidth - 1) {
       throw new InvalidPiecePlacement('Specified column is out of bounds.');
     }
 
-    const targetRow: number | null = _findEmptyCellInColumn(); // TODO: explicitly pass data
-    console.log(`targetRow ${targetRow} found.`);
-
-    if (targetRow === null) {
-      throw new InvalidPiecePlacement('Column is full.');
-    }
+    const targetRow = _findEmptyCellInColumn(validGame, col);
 
     const pieceLocation = [targetRow, col];
 
-    await _addToBoard(); // TODO: explicitly pass data
+    await _addToBoard(validGame, playerId, pieceLocation);
+    await _addToPlacedPieces(validGame, pieceLocation);
 
     await Turn.create(gameId, playerId, pieceLocation);
 
-    // game state updated so let's refresh in-memory state
+    // board updated so let's refresh in-memory state in prep for checking game end
     game = await Game.get(gameId);
 
-    Game.checkForGameEnd(game);
+    game = Game.checkForGameEnd(game);
 
-    console.log("checkForGameEnd() called and updated game is:", game);
+    // console.log("checkForGameEnd() called and updated game is:", game);
 
-    await _updateGameState(); // TODO: explicitly pass data
+    await _refreshGameState(game);
 
     if (game.gameState === 1) {
       console.log("Game has not ended so calling nextTurn()");
@@ -588,7 +572,7 @@ class Game {
     return game;
 
     /** Validates games is in state where a piece can be dropped by the current player. */
-    function _validateGameState(): StartedGameInterface {
+    function _validateGameState(game : GameInterface): StartedGameInterface {
       if (game === null) throw new NotFoundError(`No game with id: ${gameId}`);
       if (game.gameState !== 1) {
         throw new InvalidGameState('Game is not started or has finished.');
@@ -600,12 +584,15 @@ class Game {
     }
 
     /* Finds an empty row in a given column to place a piece. */
-    function _findEmptyCellInColumn(): number | null {
+    function _findEmptyCellInColumn(
+      validGame : StartedGameInterface,
+      col: number
+    ): number {
+
       console.log(`_findEmptyCellInColumn(${col}) called.`);
       // check if the column is full and return 'null' if true
       if (validGame.boardData[0][col].playerId !== null) {
-        console.log("this col was full");
-        return null;
+        throw new InvalidPiecePlacement('Column is full.');
       }
 
       let row = 0; // start at first row
@@ -626,58 +613,50 @@ class Game {
       return validGame.boardHeight - 1;
     }
 
-    /** Adds a piece to a location in the board */
-    async function _addToBoard(): Promise<number[]> {
-      console.log(`_addToBoard(${pieceLocation[0]}, ${pieceLocation[1]}) called.`);
-      validGame.boardData[pieceLocation[0]][pieceLocation[1]].playerId = playerId;
-      if (validGame.placedPieces === null) {
-        validGame.placedPieces = [[pieceLocation[0], pieceLocation[1]]];
-      } else {
-        validGame.placedPieces.push([pieceLocation[0], pieceLocation[1]]);
-      }
+    /**
+     * Adds the specified playerId to the specified location in the specified Game
+     * */
+    async function _addToBoard(
+      game: StartedGameInterface,
+      playerId: string,
+      location: number[]
+    ): Promise<undefined> {
 
-      // console.log('updated board after addition:', validGame.board);
+      game.boardData[location[0]][location[1]].playerId = playerId;
+      await Board.update(game.boardId, game.boardData);
 
-      Board.update(validGame.boardId, validGame.boardData);
-
-      await db.query(`
-        UPDATE games
-        SET
-          placed_pieces = $2
-        WHERE id = $1
-      `, [gameId, validGame.placedPieces]
-      );
-
-      return [pieceLocation[0], pieceLocation[1]];
     }
 
-    /** Checks for game end */
-    async function _updateGameState() {
+    /** Adds the specified location to the placed pieces for the specified game */
+    async function _addToPlacedPieces(
+      game: GameInterface,
+      location: number[]
+    ) : Promise<undefined> {
+
+      if (game.placedPieces === null) {
+        game.placedPieces = [[location[0], location[1]]];
+      } else {
+        game.placedPieces.push([location[0], location[1]]);
+      }
+
+      await Game.update(game.id, { placedPieces: game.placedPieces })
+
+    }
+
+    /** Refreshes DB game state based on in-memory game state. Sets winning set if won. */
+    async function _refreshGameState(game : GameInterface) : Promise<undefined> {
       if (game.gameState === 2) {
         if (game.currPlayerId !== playerId) {
           throw new Error("Game is won, but not by current player. Something went wrong.");
         }
         console.log("updating game gameState in DB since winner was found");
-        const winningSet = game.winningSet;
-        await db.query(`
-          UPDATE games
-          SET
-            winning_set = $2,
-            game_state = 2
-          WHERE id = $1
-        `, [gameId, winningSet]);
-        return;
+        await Game.update(game.id, { winningSet: game.winningSet, gameState: 2 })
       }
 
       // check for tie
       if (game.gameState === 3) {
         console.log("updating game gameState in DB since tie was found");
-        await db.query(`
-          UPDATE games
-          SET
-            game_state = 3
-          WHERE id = $1
-        `, [gameId]);
+        await Game.update(game.id, { gameState: 3 })
         return;
       }
     }
