@@ -16,6 +16,8 @@ import {
   BoardDataType,
   BoardDimensionsInterface
 } from "./board";
+import { Turn } from "./turns";
+
 import { QueryResult } from "pg";
 import _ from "lodash";
 
@@ -566,7 +568,7 @@ class Game {
 
     await _addToBoard(); // TODO: explicitly pass data
 
-    await _addTurnRecord(); // TODO: explicitly pass data
+    await Turn.create(gameId, playerId, pieceLocation);
 
     // game state updated so let's refresh in-memory state
     game = await Game.get(gameId);
@@ -647,14 +649,6 @@ class Game {
       );
 
       return [pieceLocation[0], pieceLocation[1]];
-    }
-
-    /** Add turn record to a game */
-    async function _addTurnRecord() {
-      await db.query(`
-        INSERT INTO game_turns ( game_id, player_id, location )
-        VALUES ( $1, $2, $3 )
-      `, [gameId, playerId, pieceLocation]);
     }
 
     /** Checks for game end */
