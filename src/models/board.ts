@@ -23,7 +23,7 @@ export type BoardInterface = {
   data : BoardCellFinalStateInterface[][];
   width : number;
   height : number;
-  fullCols : null | number[];
+  availCols : null | number[];
 }
 
 export interface BoardDimensionsInterface {
@@ -78,8 +78,7 @@ export class Board {
           id,
           data,
           width,
-          height,
-          full_cols as "fullCols"
+          height
         FROM boards
         WHERE id = $1
     `, [boardId]);
@@ -99,17 +98,15 @@ export class Board {
   static async update(boardId: string, boardData: BoardDataType) : Promise<BoardInterface> {
     console.log("Board.update() called.");
 
-    const fullCols = Board.getFullColumns(boardData);
     const result: QueryResult<BoardInterface> = await db.query(`
       UPDATE boards
       SET
         data = $2,
         height = $3,
-        width = $4,
-        full_cols = $5
+        width = $4
       WHERE id = $1
       RETURNING *
-    `,[boardId, boardData, boardData.length, boardData[0].length, fullCols]
+    `,[boardId, boardData, boardData.length, boardData[0].length]
     );
     const board = result.rows[0];
     return board;
@@ -326,14 +323,15 @@ export class Board {
   }
 
   /** Accepts a BoardDataType and returns an array of the column indices
-   * that are full (where the top row in each column has a non-null playerId value)
+   * that are not full (where the top row in each column has a null playerId value)
    */
-  static getFullColumns(boardData: BoardDataType) : number[] {
-    let fullCols: number[] = [];
-    for (let i = 0; i < boardData[0].length; i++) {
-      if (boardData[0][i].playerId !== null) { fullCols.push(i); }
+  static async getAvailColumns(boardId: string) : Promise<number[]> {
+    const board = await Board.get(boardId);
+    let availCols: number[] = [];
+    for (let i = 0; i < board.data[0].length; i++) {
+      if (board.data[0][i].playerId === null) { availCols.push(i); }
     }
-    return fullCols;
+    return availCols;
   }
 }
 
