@@ -23,6 +23,7 @@ export type BoardInterface = {
   data : BoardCellFinalStateInterface[][];
   width : number;
   height : number;
+  fullCols : null | number[];
 }
 
 export interface BoardDimensionsInterface {
@@ -77,7 +78,8 @@ export class Board {
           id,
           data,
           width,
-          height
+          height,
+          full_cols as "fullCols"
         FROM boards
         WHERE id = $1
     `, [boardId]);
@@ -92,19 +94,22 @@ export class Board {
 
   /**
    * Updates (and overwrites) the board data with the provided data (BoardDataType)
+   * Also updates the array of columns which are full
    */
   static async update(boardId: string, boardData: BoardDataType) : Promise<BoardInterface> {
     console.log("Board.update() called.");
 
+    const fullCols = Board.getFullColumns(boardData);
     const result: QueryResult<BoardInterface> = await db.query(`
       UPDATE boards
       SET
         data = $2,
         height = $3,
-        width = $4
+        width = $4,
+        full_cols = $5
       WHERE id = $1
       RETURNING *
-    `,[boardId, boardData, boardData.length, boardData[0].length]
+    `,[boardId, boardData, boardData.length, boardData[0].length, fullCols]
     );
     const board = result.rows[0];
     return board;
@@ -136,7 +141,8 @@ export class Board {
       SET
         data = $2,
         height = $3,
-        width = $4
+        width = $4,
+        full_cols = null,
       WHERE id = $1
       RETURNING *
     `,[boardId, boardData, boardDimensions.height, boardDimensions.width]
@@ -259,70 +265,6 @@ export class Board {
   }
 
   /**
-   * Initializes a new board and populates board with data to meet
-   * specified end game conditions.
-   * Accepts:
-   * - array of playerIds to simulate turns for (required)
-   * - if a winner should exist, that player's id (optional)
-   * - if the game should be a tie (true / false, optional)
-   * - how many turns should be taken (optional)
-   * Returns an BoardDataType with valid params
-   */
-  // static generateBoardState(
-  //   boardDimensions: BoardDimensionsInterface,
-  //   playerIds: string[],
-  //   winnerId?: string,
-  //   tie?: boolean,
-  //   turns?: number
-  // ): BoardDataType {
-  //   // TODO: Add support for arbitrary number of turns in random order
-  //   // TODO: Implement more realistic winning board state
-  //   let board = Board.initializeBoardData(boardDimensions);
-  //   let currPlayerId = playerIds[0];
-
-  //   // see if we want to create a winning state
-  //   if (winnerId !== undefined) {
-  //     if (!playerIds.includes(winnerId)) {
-  //       throw new Error("Specified winner player ID is not part of provided list of player IDs.");
-  //     }
-  //     // create four in a row for the winning player ID
-  //     let counter = 0;
-  //     while (counter <= 3) {
-  //       board[boardDimensions.height - 1][counter].playerId = winnerId;
-  //       counter++;
-  //     }
-  //     return board;
-  //   }
-
-  //   // see if we want to create a tie
-  //   if (tie) {
-  //     if (playerIds.length < 2) {
-  //       throw new Error("In order to create a tie there must be 2 or more players.");
-  //     }
-
-  //     for (let y = 0; y < boardDimensions.height; y++) {
-  //       for (let x = 0; x < boardDimensions.width; x++) {
-  //         board[y][x].playerId = playerIds[0];
-  //         _cyclePlayers();
-  //       }
-  //     }
-  //     return board;
-  //   }
-
-  //   // fail safe if no desired end-game state is specified
-  //   return board;
-
-  //   function _cyclePlayers() {
-  //     const currPlayerIndex = playerIds.indexOf(currPlayerId);
-  //     if (currPlayerIndex === playerIds.length - 1) {
-  //       currPlayerId = playerIds[0];
-  //     } else {
-  //       currPlayerId = playerIds[currPlayerIndex + 1];
-  //     }
-  //   }
-  // }
-
-  /**
  * Updates the provided BoardDataType to have pieces played by the provided
  * player ID at the bottom row in columns 1, 2, and 3 so that a piece can be
  * placed in column 0 and trigger a win. Should only be provided a fresh board.
@@ -381,6 +323,17 @@ export class Board {
     const board = await Board.get(boardId);
     const boardPieces = board.data.map(r => r.map(c => c.playerId));
     return boardPieces;
+  }
+
+  /** Accepts a BoardDataType and returns an array of the column indices
+   * that are full (where the top row in each column has a non-null playerId value)
+   */
+  static getFullColumns(boardData: BoardDataType) : number[] {
+    let fullCols: number[] = [];
+    for (let i = 0; i < boardData[0].length; i++) {
+      if (boardData[0][i].playerId !== null) { fullCols.push(i); }
+    }
+    return fullCols;
   }
 }
 

@@ -382,13 +382,7 @@ class Game {
 
     await _setPlayOrder();
 
-    await db.query(`
-      UPDATE games
-      SET
-        game_state = 1
-      WHERE
-        id = $1
-    `, [gameId]);
+    await Game.update(gameId, { gameState: 1} );
 
     if (nextTurn) await Game.nextTurn(gameId);
     return undefined;
