@@ -39,22 +39,23 @@ export class Turn {
   static async getTurns(gameId: string, playerId?: string) : Promise<TurnInterface[]> {
     console.log("Turns.getTurns() called");
 
-    let whereClause : string = 'game_id = $1';
+    let whereConditions : string = 'game_id = $1';
     let values = [gameId];
     if (playerId !== undefined) {
-      whereClause += ' AND player_id = $2';
+      whereConditions += ' AND player_id = $2';
       values.push(playerId);
     }
-    const result : QueryResult<TurnInterface> = await db.query(`
+    const sqlQuery = `
       SELECT
         id as "turnId",
         game_id as "gameId",
         player_id as "playerId",
         location
-      FROM turns
-      ${whereClause}
+      FROM game_turns
+      WHERE ${whereConditions}
       ORDER BY id
-    `,)
+    `
+    const result : QueryResult<TurnInterface> = await db.query(sqlQuery,values)
     return result.rows;
   }
 

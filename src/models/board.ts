@@ -138,8 +138,7 @@ export class Board {
       SET
         data = $2,
         height = $3,
-        width = $4,
-        full_cols = null,
+        width = $4
       WHERE id = $1
       RETURNING *
     `,[boardId, boardData, boardDimensions.height, boardDimensions.width]

@@ -8,7 +8,7 @@ import { CountResultInterface } from "../utilities/commonInterfaces";
 import { fisherSort, generateRandomName } from "../utilities/utils";
 
 import db from "../db";
-import { PlayerInterface } from "./player";
+import { Player, PlayerInterface } from "./player";
 import {
   Board,
   BoardInterface,
@@ -430,15 +430,13 @@ class Game {
 
     //TODO: Add check to ensure game_state is 1 and throw error if not
 
-    let nextPlayer: GamePlayersInterface;
     let game = await Game.get(gameId);
     let gamePlayers = await Game.getPlayers(gameId);
     let currPlayerId = game.currPlayerId;
 
     // update current player
-    await _updateCurrentPlayer();
-
-    // TODO: Added call to aiCallback() function
+    const nextPlayer = await _updateCurrentPlayer(gamePlayers);
+    if (nextPlayer.ai === true) { await Player.takeTurn(gameId, nextPlayer.id); }
 
     /**
      * Internal function for Game.nextTurn()
@@ -446,7 +444,9 @@ class Game {
      * - If there is no current player (new game), sets it to play order 0
      * - If it's the last player in player order, sets it to play order 0
      */
-    async function _updateCurrentPlayer(): Promise<undefined> {
+    async function _updateCurrentPlayer(gamePlayers : GamePlayersInterface[]): Promise<GamePlayersInterface> {
+
+      let nextPlayer: GamePlayersInterface;
       const currPlayer = gamePlayers.find(
         p => p.id === currPlayerId
       );
@@ -495,8 +495,9 @@ class Game {
 
       console.log("game updated w/ curr player set:", queryGIResult.rows[0]);
 
-      //TODO: Add check for next player (new curr player) type and call AI callback
+      return nextPlayer;
     }
+
 
   }
 
