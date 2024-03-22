@@ -1,7 +1,10 @@
 import { ExpressError, NotFoundError, BadRequestError } from "../expressError";
 import { SQLQueries } from "../utilities/sqlQueries";
+import { Game } from "./game";
+import { Board } from "./board";
 
 import db from "../db";
+import { Console } from "console";
 
 // const { sqlForPartialUpdate } = require("../helpers/sql");
 
@@ -22,7 +25,23 @@ interface PlayerInterface extends NewPlayerInterface {
   createdOn: Date;
 };
 
+const delayInMs = 200;
+
+function delay(ms : number) {
+  /**
+   * This creates a new Promise for delay purposes.
+   * The Promise constructor takes two functions as parameters:
+   * - resolve function (a function which if called resolves promise successfully)
+   * - reject function (a function which if called resolves promise unsuccessfully)
+   * In this case, we are only providing it the resolve function we will call
+   * Our resolve function is an anonymous function which calls itself after a set time
+   */
+
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 class Player {
+
   /**
    * Create a player (from data), update db, return new player data.
    *
@@ -30,7 +49,6 @@ class Player {
    *
    * Returns { id, name, color, ai, createdOn }
    * */
-
   static async create(newPlayer: NewPlayerInterface) : Promise<PlayerInterface> {
 
     const result = await db.query(`
@@ -58,7 +76,6 @@ class Player {
    * Find all players
    * Returns [{ id, name, color, ai, createdOn }, ...]   *
    * */
-
   static async getAll() {
 
     const sqlQuery = `
@@ -80,7 +97,6 @@ class Player {
    *
    * Throws NotFoundError if not found.
    **/
-
   static async get(id: string) : Promise<PlayerInterface> {
     const result = await db.query(`
         SELECT id,
@@ -104,7 +120,6 @@ class Player {
    *
    * Throws NotFoundError if player not found.
    **/
-
   static async delete(id: string) {
     const result = await db.query(`
         DELETE
@@ -114,6 +129,20 @@ class Player {
     const player = result.rows[0];
 
     if (!player) throw new NotFoundError(`No player: ${id}`);
+  }
+
+  /** Performs a turn for the specific player in the specified game.
+   * Should only be called on behalf of AI players by the AI logic.
+   */
+  static async takeTurn(gameId: string, playerId: string) : Promise<undefined> {
+    console.log("takeTurn() called for playerId:", playerId);
+    const game = await Game.get(gameId);
+    const board = await Board.get(game.boardId);
+    const availCols = await Board.getAvailColumns(game.boardId);
+    await delay(delayInMs);
+    let colToAttempt = Math.floor(Math.random() * availCols.length);
+    console.log(`attempting to drop piece for AI player: ${playerId} at column: ${colToAttempt} ...`);
+    await Game.dropPiece(gameId, playerId, colToAttempt);
   }
 
 }
