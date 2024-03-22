@@ -139,8 +139,9 @@ class Player {
     const game = await Game.get(gameId);
     const board = await Board.get(game.boardId);
     const availCols = await Board.getAvailColumns(game.boardId);
+    console.log("columns available:", availCols);
     await delay(delayInMs);
-    let colToAttempt = Math.floor(Math.random() * availCols.length);
+    let colToAttempt = availCols[Math.floor(Math.random() * availCols.length)];
     console.log(`attempting to drop piece for AI player: ${playerId} at column: ${colToAttempt} ...`);
     await Game.dropPiece(gameId, playerId, colToAttempt);
   }

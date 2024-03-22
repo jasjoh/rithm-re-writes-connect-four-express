@@ -508,7 +508,7 @@ class Game {
    */
   static async getTurns(gameId: string): Promise<GameTurnInterface[]> {
     // console.log("getTurns() called");
-    const turns = await Turn.getTurns(gameId);
+    const turns = await Turn.getAll(gameId);
     return turns;
   }
 
@@ -668,16 +668,27 @@ class Game {
 
     if (game.placedPieces === null) { throw new Error("placedPiece is null.") };
 
+    // check each player game piece to see if one of it's valid coord sets contains
+    // all the same player IDs
     for (let i = 0; i < game.placedPieces.length; i++) {
       const py = game.placedPieces[i][0];
       const px = game.placedPieces[i][1];
       // console.log("checking placed piece at xy", py, px);
-      // check each valid coord set for game piece
+
+      // grab the player associated with this piece
+      const playerId = game.boardData[py][px].playerId;
+
+      // check each valid coord set for this played game piece
       for (let j = 0; j < game.boardData[py][px].validCoordSets.length; j++) {
-        const validCoordSets = game.boardData[py][px].validCoordSets[j];
-        const playerId = game.boardData[validCoordSets[j][0]][validCoordSets[j][1]].playerId;
+
+        // grab the coordinate set to evaluate
+        const validCoordSet = game.boardData[py][px].validCoordSets[j];
+
+        // check if the playerId for this played piece is not null AND
+        // check if the playerId for every other piece at each coordinate
+        // in the valid coordinate set is also not null AND the same player ID
         if (playerId !== null &&
-          validCoordSets.every(
+          validCoordSet.every(
             c => {
               return (
                 game.boardData[c[0]][c[1]].playerId !== null &&
@@ -687,7 +698,7 @@ class Game {
         ) {
           console.log("checkForGameEnd() determined game is won");
           game.gameState = 2;
-          game.winningSet = game.boardData[py][px].validCoordSets[j];
+          game.winningSet = validCoordSet;
           return game as GameInterface;
         }
       }

@@ -9,10 +9,14 @@ import { QueryResult } from "pg";
 // a board cell can be null if uninitialized or in a final state if initialized
 type BoardCellInitialStateType = BoardCellFinalStateInterface | null;
 
+type CoordinatesType = number[];
+
+type ValidCoordSetType = CoordinatesType[];
+
 // an initialized board cell has this interface
 export interface BoardCellFinalStateInterface {
   playerId: string | null;
-  validCoordSets: number[][][];
+  validCoordSets: ValidCoordSetType[];
 }
 
 export type BoardDataType = BoardCellFinalStateInterface[][];

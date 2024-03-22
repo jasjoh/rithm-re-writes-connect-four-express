@@ -35,7 +35,7 @@ router.get("/:id/players", async function (req: Request, res: Response) {
  */
 router.post("/:id/players", async function (req: Request, res: Response) {
   // console.log("add players called with playerId, gameId:", req.body.id, req.params.id);
-  const result = await Game.addPlayers(req.body, req.params.id);
+  const result = await Game.addPlayers(req.params.id, req.body);
   return res.status(201).json({ playerCount: result });
 });
 
@@ -43,7 +43,7 @@ router.post("/:id/players", async function (req: Request, res: Response) {
  * Returns the removed player's ID
  */
 router.delete("/:gameid/players/:playerid", async function (req: Request, res: Response) {
-  const result = await Game.removePlayer(req.params.playerid, req.params.gameid);
+  const result = await Game.removePlayer(req.params.gameid, req.params.playerid);
   return res.json({ removed: req.params.playerid });
 });
 
