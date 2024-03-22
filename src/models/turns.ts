@@ -36,7 +36,7 @@ export class Turn {
    * Retrieves all the turns associated with a game and optionally a specific player
    * Returns an array of 0 or more turns in the form of TurnInterface[]
    */
-  static async getTurns(gameId: string, playerId?: string) : Promise<TurnInterface[]> {
+  static async getAll(gameId: string, playerId?: string) : Promise<TurnInterface[]> {
     console.log("Turns.getTurns() called");
 
     let whereConditions : string = 'game_id = $1';
